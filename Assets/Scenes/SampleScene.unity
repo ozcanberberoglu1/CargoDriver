@@ -4540,6 +4540,76 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1284424947}
   m_CullTransparentMesh: 1
+--- !u!1 &1321585280
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1321585282}
+  - component: {fileID: 1321585281}
+  m_Layer: 0
+  m_Name: MainMenuController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1321585281
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1321585280}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4798091533c4f4223823b1dd3f3ab519, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MainMenuController
+  mainMenuPanel: {fileID: 929709984}
+  roomsPanel: {fileID: 1284424947}
+  roomsView: {fileID: 83217674}
+  createRoomView: {fileID: 1010637146}
+  settingsPanel: {fileID: 1933175123}
+  playButton: {fileID: 1169458237}
+  settingsButton: {fileID: 1723950732}
+  exitButton: {fileID: 2020173490}
+  roomListContent: {fileID: 1527025807}
+  roomContentPrefab: {fileID: 3536192635139406939, guid: 8cc06f42d838e4e7ebcc8288bac27899, type: 3}
+  createRoomNavButton: {fileID: 1201137828}
+  findRoomButton: {fileID: 1127121564}
+  findInputField: {fileID: 1727150143}
+  roomsBackButton: {fileID: 1051261259}
+  roomNameInput: {fileID: 321322798}
+  passwordInput: {fileID: 448859265}
+  playerCountButtons:
+  - {fileID: 728732218}
+  - {fileID: 819424470}
+  - {fileID: 1972267146}
+  - {fileID: 1829290739}
+  - {fileID: 1232725380}
+  - {fileID: 1454787801}
+  createRoomButton: {fileID: 2123982555}
+  createRoomBackButton: {fileID: 1679052759}
+  settingsBackButton: {fileID: 2104260246}
+--- !u!4 &1321585282
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1321585280}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1326798101
 GameObject:
   m_ObjectHideFlags: 0
@@ -6782,6 +6852,50 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1992298519}
   m_CullTransparentMesh: 1
+--- !u!1 &2008763285
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2008763287}
+  - component: {fileID: 2008763286}
+  m_Layer: 0
+  m_Name: NetworkManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2008763286
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2008763285}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7ddc0c56c88046428413e725638e2ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
+--- !u!4 &2008763287
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2008763285}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2020173488
 GameObject:
   m_ObjectHideFlags: 0
@@ -7365,3 +7479,5 @@ SceneRoots:
   - {fileID: 832575519}
   - {fileID: 1601401704}
   - {fileID: 1020347059}
+  - {fileID: 2008763287}
+  - {fileID: 1321585282}
