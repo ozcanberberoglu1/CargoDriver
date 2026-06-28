@@ -26,9 +26,13 @@ public class CarControl : MonoBehaviourPun, IPunObservable
     private Quaternion syncRot;
     private Vector3 syncVel;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody>();
+    }
+
+    void Start()
+    {
         if (centerOfMass != null)
             rb.centerOfMass = centerOfMass.localPosition;
 
@@ -171,6 +175,9 @@ public class CarControl : MonoBehaviourPun, IPunObservable
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
+        if (rb == null) rb = GetComponent<Rigidbody>();
+        if (rb == null) return;
+
         if (stream.IsWriting)
         {
             stream.SendNext(rb.position);
