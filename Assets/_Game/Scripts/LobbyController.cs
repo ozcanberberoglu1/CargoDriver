@@ -1,3 +1,4 @@
+using System.Collections;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
@@ -16,17 +17,19 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [Header("Buttons")]
     [SerializeField] private Button closeRoomButton;
 
-    private void Start()
+    private IEnumerator Start()
     {
         closeRoomButton.onClick.AddListener(OnCloseRoomClicked);
+        closeRoomButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
 
-        if (PhotonNetwork.InRoom)
+        while (!PhotonNetwork.InRoom ||
+               !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("roomName"))
         {
-            UpdateRoomInfo();
-            UpdatePlayerCount();
+            yield return null;
         }
 
-        closeRoomButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
+        UpdateRoomInfo();
+        UpdatePlayerCount();
     }
 
     private void UpdateRoomInfo()
@@ -67,7 +70,10 @@ public class LobbyController : MonoBehaviourPunCallbacks
         if (propertiesThatChanged.TryGetValue("closed", out object closed) && (bool)closed)
         {
             PhotonNetwork.LeaveRoom();
+            return;
         }
+
+        UpdateRoomInfo();
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
