@@ -28,6 +28,31 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (spawnedPickup != null)
                 StartCoroutine(EnableCarPhysics(spawnedPickup));
         }
+        else
+        {
+            StartCoroutine(WaitAndSpawnCargo());
+        }
+    }
+
+    private IEnumerator WaitAndSpawnCargo()
+    {
+        yield return new WaitForSeconds(2f);
+
+        GameObject pickup = FindPickupInScene();
+        if (pickup == null) yield break;
+
+        spawnedPickup = pickup;
+        SpawnCargoOnPickup(pickup);
+    }
+
+    private GameObject FindPickupInScene()
+    {
+        foreach (var pv in FindObjectsByType<PhotonView>(FindObjectsSortMode.None))
+        {
+            if (pv.GetComponent<CarControl>() != null)
+                return pv.gameObject;
+        }
+        return GameObject.Find("Pickup(Clone)");
     }
 
     private void Update()
@@ -114,6 +139,19 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 pv.ObservedComponents.Add(cc);
         }
 
+        SpawnCargoOnPickup(pickup);
+
+        return pickup;
+    }
+
+    private void SpawnCargoOnPickup(GameObject pickup)
+    {
+        var props = PhotonNetwork.CurrentRoom.CustomProperties;
+        if (!props.ContainsKey("cargoData")) return;
+
+        string data = props["cargoData"].ToString();
+        string[] parts = data.Split(';');
+
         Transform cargoParent = pickup.transform.Find("CargoBoxes");
 
         for (int i = 1; i < parts.Length; i++)
@@ -150,8 +188,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (cargoParent != null)
                 box.transform.SetParent(cargoParent, true);
         }
-
-        return pickup;
     }
 
     private Vector3 ParseVec3(string x, string y, string z)
