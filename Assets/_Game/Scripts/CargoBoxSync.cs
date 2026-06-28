@@ -3,7 +3,7 @@ using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(PhotonView))]
-public class CargoBoxSync : MonoBehaviourPun, IPunObservable
+public class CargoBoxSync : MonoBehaviourPun, IPunObservable, IPunOwnershipCallbacks
 {
     private Rigidbody rb;
     private bool isGrabbed;
@@ -11,6 +11,17 @@ public class CargoBoxSync : MonoBehaviourPun, IPunObservable
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+    }
+
+    private void Start()
+    {
+        PhotonNetwork.AddCallbackTarget(this);
+        Debug.Log($"[CargoBoxSync] {gameObject.name} ViewID={photonView.ViewID} Owner={photonView.Owner?.NickName ?? "null"} IsMine={photonView.IsMine} OwnershipTransfer={photonView.OwnershipTransfer}");
+    }
+
+    private void OnDestroy()
+    {
+        PhotonNetwork.RemoveCallbackTarget(this);
     }
 
     private void Update()
@@ -31,6 +42,7 @@ public class CargoBoxSync : MonoBehaviourPun, IPunObservable
     public void SetGrabbed(bool grabbed)
     {
         isGrabbed = grabbed;
+        Debug.Log($"[CargoBoxSync] SetGrabbed({grabbed}) on {gameObject.name} ViewID={photonView.ViewID} IsMine={photonView.IsMine} Owner={photonView.Owner?.NickName ?? "null"}");
 
         if (photonView.IsMine)
         {
@@ -49,7 +61,28 @@ public class CargoBoxSync : MonoBehaviourPun, IPunObservable
         }
         else
         {
+            bool prev = isGrabbed;
             isGrabbed = (bool)stream.ReceiveNext();
+            if (prev != isGrabbed)
+                Debug.Log($"[CargoBoxSync] RECV grabbed={isGrabbed} on {gameObject.name} from {info.Sender?.NickName}");
         }
+    }
+
+    public void OnOwnershipRequest(PhotonView targetView, Photon.Realtime.Player requestingPlayer)
+    {
+        if (targetView != photonView) return;
+        Debug.Log($"[CargoBoxSync] OwnershipRequest on {gameObject.name} from {requestingPlayer.NickName}");
+    }
+
+    public void OnOwnershipTransfered(PhotonView targetView, Photon.Realtime.Player previousOwner)
+    {
+        if (targetView != photonView) return;
+        Debug.Log($"[CargoBoxSync] OwnershipTransferred on {gameObject.name} from {previousOwner?.NickName} to {targetView.Owner?.NickName} IsMine={targetView.IsMine}");
+    }
+
+    public void OnOwnershipTransferFailed(PhotonView targetView, Photon.Realtime.Player senderOfFailedRequest)
+    {
+        if (targetView != photonView) return;
+        Debug.LogError($"[CargoBoxSync] OwnershipTransferFAILED on {gameObject.name} sender={senderOfFailedRequest?.NickName}");
     }
 }

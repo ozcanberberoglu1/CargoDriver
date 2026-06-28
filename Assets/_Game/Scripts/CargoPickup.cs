@@ -170,14 +170,28 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         currentHoldDist = holdForward;
 
         heldPV = heldRb.GetComponent<PhotonView>();
+
+        Debug.Log($"[CargoPickup] START GRAB: obj={rb.gameObject.name} ViewID={heldPV?.ViewID} currentOwner={heldPV?.Owner?.NickName ?? "null"} myName={PhotonNetwork.LocalPlayer.NickName} IsMaster={PhotonNetwork.IsMasterClient}");
+
         if (heldPV != null)
+        {
+            Debug.Log($"[CargoPickup] TransferOwnership called. OwnershipTransfer={heldPV.OwnershipTransfer}");
             heldPV.TransferOwnership(PhotonNetwork.LocalPlayer);
+        }
+        else
+        {
+            Debug.LogError($"[CargoPickup] NO PhotonView on {rb.gameObject.name}!");
+        }
 
         CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
         if (sync != null)
+        {
             sync.SetGrabbed(true);
+            Debug.Log($"[CargoPickup] CargoBoxSync.SetGrabbed(true) called");
+        }
         else
         {
+            Debug.LogWarning($"[CargoPickup] NO CargoBoxSync on {rb.gameObject.name}! Using fallback.");
             heldRb.useGravity = false;
             heldRb.linearDamping = 12f;
             heldRb.angularDamping = 8f;
@@ -186,6 +200,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private void StopGrab()
     {
+        Debug.Log($"[CargoPickup] STOP GRAB: obj={heldRb?.gameObject.name} ViewID={heldPV?.ViewID}");
+
         if (heldRb != null)
         {
             CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
@@ -300,10 +316,16 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             {
                 heldRb = pv.GetComponent<Rigidbody>();
                 isHolding = true;
+                Debug.Log($"[CargoPickup] REMOTE: found held obj ViewID={syncHeldId} name={heldRb?.gameObject.name}");
+            }
+            else
+            {
+                Debug.LogWarning($"[CargoPickup] REMOTE: PhotonView.Find({syncHeldId}) returned NULL");
             }
         }
         else if (!syncHolding && isHolding)
         {
+            Debug.Log($"[CargoPickup] REMOTE: release detected");
             heldRb = null;
             heldPV = null;
             isHolding = false;
@@ -321,7 +343,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (stream.IsWriting)
         {
             stream.SendNext(isHolding);
-            stream.SendNext(heldPV != null ? heldPV.ViewID : -1);
+            int vid = heldPV != null ? heldPV.ViewID : -1;
+            stream.SendNext(vid);
         }
         else
         {
