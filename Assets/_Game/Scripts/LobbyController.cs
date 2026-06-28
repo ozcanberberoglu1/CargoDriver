@@ -17,6 +17,10 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [Header("Buttons")]
     [SerializeField] private Button closeRoomButton;
 
+    [Header("Spawn")]
+    [SerializeField] private Transform spawnPoints;
+    [SerializeField] private string playerPrefabName = "Toy1";
+
     private IEnumerator Start()
     {
         closeRoomButton.onClick.AddListener(OnCloseRoomClicked);
@@ -30,6 +34,30 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
         UpdateRoomInfo();
         UpdatePlayerCount();
+        SpawnPlayer();
+    }
+
+    private void SpawnPlayer()
+    {
+        Vector3 pos = GetSpawnPosition();
+        PhotonNetwork.Instantiate(playerPrefabName, pos, Quaternion.identity);
+    }
+
+    private Vector3 GetSpawnPosition()
+    {
+        if (spawnPoints != null && spawnPoints.childCount > 0)
+        {
+            int index = (PhotonNetwork.LocalPlayer.ActorNumber - 1) % spawnPoints.childCount;
+            return spawnPoints.GetChild(index).position;
+        }
+
+        // No child spawn points: distribute in a circle
+        float angle = (PhotonNetwork.LocalPlayer.ActorNumber - 1) * 60f;
+        float radius = 2f;
+        Vector3 center = spawnPoints != null ? spawnPoints.position : Vector3.zero;
+        center.x += Mathf.Cos(angle * Mathf.Deg2Rad) * radius;
+        center.z += Mathf.Sin(angle * Mathf.Deg2Rad) * radius;
+        return center;
     }
 
     private void UpdateRoomInfo()

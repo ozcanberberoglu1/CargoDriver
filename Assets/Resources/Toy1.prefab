@@ -72,6 +72,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8838093070114283173}
+  - component: {fileID: 2578931998316328292}
+  - component: {fileID: 6626503009625861297}
+  - component: {fileID: 1536221605920421362}
+  - component: {fileID: 2791334731537681316}
+  - component: {fileID: 1589120468232145421}
   m_Layer: 0
   m_Name: Toy1
   m_TagString: Untagged
@@ -98,6 +103,114 @@ Transform:
   - {fileID: 808775215378655578}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!143 &2578931998316328292
+CharacterController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196258718472826064}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Height: 2
+  m_Radius: 0.3
+  m_SlopeLimit: 45
+  m_StepOffset: 0.3
+  m_SkinWidth: 0.08
+  m_MinMoveDistance: 0.001
+  m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &6626503009625861297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196258718472826064}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa584fbee541324448dd18d8409c7a41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: PhotonUnityNetworking::Photon.Pun.PhotonView
+  ObservedComponentsFoldoutOpen: 1
+  Group: 0
+  prefixField: -1
+  Synchronization: 3
+  OwnershipTransfer: 0
+  observableSearch: 2
+  ObservedComponents:
+  - {fileID: 1536221605920421362}
+  sceneViewId: 0
+  InstantiationId: 0
+  isRuntimeInstantiated: 0
+--- !u!114 &1536221605920421362
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196258718472826064}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 627855c7f81362d41938ffe0b1475957, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: PhotonUnityNetworking::Photon.Pun.PhotonTransformView
+  m_SynchronizePosition: 1
+  m_SynchronizeRotation: 1
+  m_SynchronizeScale: 0
+  m_UseLocal: 1
+--- !u!114 &2791334731537681316
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196258718472826064}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51dc39f63b2d048deac8c7b717d74380, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ToyController
+  moveSpeed: 5
+  rotationSpeed: 10
+  jumpHeight: 1.5
+  gravity: -20
+  playerCamera: {fileID: 7072404295313307850}
+  mouseSensitivity: 2
+  cameraDistance: 5
+  cameraHeight: 3
+  minPitch: -10
+  maxPitch: 60
+--- !u!95 &1589120468232145421
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196258718472826064}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 77cf2816242d241c78142b0299689b10, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!1 &395683921927027890
 GameObject:
   m_ObjectHideFlags: 0
@@ -283,7 +396,7 @@ Transform:
   m_GameObject: {fileID: 3434531206989797348}
   serializedVersion: 2
   m_LocalRotation: {x: 0.0000011384867, y: -0.000004285717, z: -0.000050598504, w: 1}
-  m_LocalPosition: {x: 0.000004904618, y: 0.7180065, z: -0.0073528998}
+  m_LocalPosition: {x: 0.000004904618, y: 0.60400647, z: -0.0073528998}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1084,6 +1197,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3384368656240912337}
   - component: {fileID: 8789849594625776762}
+  - component: {fileID: 2981808063115511928}
   m_Layer: 0
   m_Name: Mesh0
   m_TagString: Untagged
@@ -1100,7 +1214,7 @@ Transform:
   m_GameObject: {fileID: 8679346595934047116}
   serializedVersion: 2
   m_LocalRotation: {x: -0.00000003774895, y: 0, z: -0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: 0}
+  m_LocalPosition: {x: -0, y: -0.114, z: 0}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1188,6 +1302,29 @@ SkinnedMeshRenderer:
     m_Center: {x: -0.00040361285, y: 0.16253045, z: 0.03560072}
     m_Extent: {x: 0.66138244, y: 1.1068552, z: 0.43756175}
   m_DirtyAABB: 0
+--- !u!136 &2981808063115511928
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8679346595934047116}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.0041034706
+  m_Height: 0.01977564
+  m_Direction: 1
+  m_Center: {x: 0, y: 0.0091, z: -7.572488e-18}
 --- !u!1 &8733742933545132563
 GameObject:
   m_ObjectHideFlags: 0
@@ -1224,7 +1361,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 2.183}
+  m_AnchoredPosition: {x: 0, y: 2.168}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &3260949535889296978
