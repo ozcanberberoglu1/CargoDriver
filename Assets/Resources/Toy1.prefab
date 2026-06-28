@@ -185,9 +185,9 @@ MonoBehaviour:
   gravity: -20
   playerCamera: {fileID: 7072404295313307850}
   mouseSensitivity: 2
-  cameraDistance: 5
-  cameraHeight: 3
-  minPitch: -10
+  cameraDistance: 8
+  cameraHeight: 2.24
+  minPitch: -2.15
   maxPitch: 60
 --- !u!95 &1589120468232145421
 Animator:
@@ -479,6 +479,7 @@ GameObject:
   - component: {fileID: 2351185451728920363}
   - component: {fileID: 7702496721807242588}
   - component: {fileID: 5968052434572173927}
+  - component: {fileID: 7636844004538794443}
   m_Layer: 5
   m_Name: NameText
   m_TagString: Untagged
@@ -605,6 +606,18 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!114 &7636844004538794443
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4442974103209775556}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9ae566c39fc94e15ad7b330742459aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BillboardUI
 --- !u!1 &4566667277891292995
 GameObject:
   m_ObjectHideFlags: 0
