@@ -4971,6 +4971,7 @@ MonoBehaviour:
   createRoomNavButton: {fileID: 1201137828}
   findRoomButton: {fileID: 1127121564}
   findInputField: {fileID: 1727150143}
+  nameInputField: {fileID: 218439230}
   roomsBackButton: {fileID: 1051261259}
   roomNameInput: {fileID: 321322798}
   passwordInput: {fileID: 448859265}

@@ -25,6 +25,7 @@ public class MainMenuController : MonoBehaviourPunCallbacks
     [SerializeField] private Button createRoomNavButton;
     [SerializeField] private Button findRoomButton;
     [SerializeField] private TMP_InputField findInputField;
+    [SerializeField] private TMP_InputField nameInputField;
 
     [Header("Rooms View Buttons")]
     [SerializeField] private Button roomsBackButton;
@@ -38,6 +39,8 @@ public class MainMenuController : MonoBehaviourPunCallbacks
 
     [Header("Settings")]
     [SerializeField] private Button settingsBackButton;
+
+    private const string PlayerNameKey = "PlayerName";
 
     private int selectedPlayerCount = 2;
     private readonly Dictionary<string, RoomInfo> cachedRoomList = new();
@@ -66,9 +69,34 @@ public class MainMenuController : MonoBehaviourPunCallbacks
 
         roomNameInput.characterLimit = 15;
         passwordInput.characterLimit = 15;
+        nameInputField.characterLimit = 10;
+
+        LoadPlayerName();
+        nameInputField.onValueChanged.AddListener(OnPlayerNameChanged);
 
         ShowMainMenu();
         UpdatePlayerCountButtons();
+    }
+
+    private void LoadPlayerName()
+    {
+        string saved = PlayerPrefs.GetString(PlayerNameKey, "");
+        nameInputField.text = saved;
+        ApplyPlayerName(saved);
+    }
+
+    private void OnPlayerNameChanged(string value)
+    {
+        ApplyPlayerName(value);
+        PlayerPrefs.SetString(PlayerNameKey, value);
+        PlayerPrefs.Save();
+    }
+
+    private void ApplyPlayerName(string name)
+    {
+        PhotonNetwork.NickName = string.IsNullOrWhiteSpace(name)
+            ? ""
+            : name.Trim();
     }
 
     #region UI Navigation

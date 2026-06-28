@@ -63,6 +63,11 @@ public class ToyController : MonoBehaviourPun
         SetPlayerName();
     }
 
+    private void OnEnable()
+    {
+        SetPlayerName();
+    }
+
     private void Update()
     {
         if (!photonView.IsMine) return;
@@ -153,11 +158,15 @@ public class ToyController : MonoBehaviourPun
 
     private void SetPlayerName()
     {
+        if (photonView == null || photonView.Owner == null) return;
+
         TextMeshProUGUI nameText = GetComponentInChildren<TextMeshProUGUI>();
         if (nameText != null)
         {
             string nick = photonView.Owner.NickName;
-            nameText.text = string.IsNullOrEmpty(nick) ? $"Player {photonView.Owner.ActorNumber}" : nick;
+            nameText.text = string.IsNullOrEmpty(nick)
+                ? $"Player{photonView.Owner.ActorNumber}"
+                : nick;
         }
     }
 }
