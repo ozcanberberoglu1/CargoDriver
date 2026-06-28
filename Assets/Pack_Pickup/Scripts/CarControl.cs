@@ -1,10 +1,13 @@
+using System.Collections.Generic;
+using ExitGames.Client.Photon;
 using Photon.Pun;
+using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
-public class CarControl : MonoBehaviourPun, IPunObservable
+public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 {
     public float enginePower = 2000.0f;
     public float brakePower = 3000.0f;
@@ -18,13 +21,12 @@ public class CarControl : MonoBehaviourPun, IPunObservable
     private Rigidbody rb;
     private float currentTurnAngle;
 
-    private float netVertical;
-    private float netHorizontal;
-    private bool netBrake;
-
     private Vector3 syncPos;
     private Quaternion syncRot;
     private Vector3 syncVel;
+
+    private const byte INPUT_EVENT = 42;
+    private readonly Dictionary<int, float[]> remoteInputs = new();
 
     void Awake()
     {
@@ -33,26 +35,43 @@ public class CarControl : MonoBehaviourPun, IPunObservable
 
     void Start()
     {
-        if (centerOfMass != null)
+        if (centerOfMass != null && rb != null)
             rb.centerOfMass = centerOfMass.localPosition;
 
-        syncPos = rb.position;
-        syncRot = rb.rotation;
+        if (rb != null)
+        {
+            syncPos = rb.position;
+            syncRot = rb.rotation;
+        }
+    }
+
+    void OnEnable()
+    {
+        PhotonNetwork.AddCallbackTarget(this);
+    }
+
+    void OnDisable()
+    {
+        PhotonNetwork.RemoveCallbackTarget(this);
     }
 
     void FixedUpdate()
     {
+        if (rb == null) return;
+
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
             return;
         }
 
+        SendMyInput();
+
         if (PhotonNetwork.IsMasterClient)
         {
             float v = 0f, h = 0f;
             bool brake = false;
-            GatherDistributedInput(ref v, ref h, ref brake);
+            GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
         }
         else
@@ -64,45 +83,80 @@ public class CarControl : MonoBehaviourPun, IPunObservable
         }
     }
 
-    private void GatherDistributedInput(ref float vertical, ref float horizontal, ref bool brake)
+    #region Input
+
+    private void SendMyInput()
     {
-        var props = PhotonNetwork.CurrentRoom.CustomProperties;
+        if (PhotonNetwork.IsMasterClient) return;
+
         Keyboard kb = Keyboard.current;
+        if (kb == null) return;
+
+        var props = PhotonNetwork.CurrentRoom.CustomProperties;
         int myActor = PhotonNetwork.LocalPlayer.ActorNumber;
 
-        vertical += GetKeyInput(props, "ctrl_W", myActor, kb, kb?.wKey, 1f);
-        vertical += GetKeyInput(props, "ctrl_S", myActor, kb, kb?.sKey, -1f);
-        horizontal += GetKeyInput(props, "ctrl_A", myActor, kb, kb?.leftArrowKey, -1f);
-        if (horizontal == 0f)
-            horizontal += GetKeyInput(props, "ctrl_A", myActor, kb, kb?.aKey, -1f);
-        horizontal += GetKeyInput(props, "ctrl_D", myActor, kb, kb?.dKey, 1f);
+        float v = 0f, h = 0f;
+        bool brake = false;
 
-        object spaceVal;
-        props.TryGetValue("ctrl_Space", out spaceVal);
-        int spaceOwner = spaceVal != null ? (int)spaceVal : -1;
-        if (spaceOwner == myActor && kb != null && kb.spaceKey.isPressed)
-            brake = true;
+        if (HasCtrl(props, "ctrl_W", myActor) && kb.wKey.isPressed) v += 1f;
+        if (HasCtrl(props, "ctrl_S", myActor) && kb.sKey.isPressed) v -= 1f;
+        if (HasCtrl(props, "ctrl_A", myActor) && kb.aKey.isPressed) h -= 1f;
+        if (HasCtrl(props, "ctrl_D", myActor) && kb.dKey.isPressed) h += 1f;
+        if (HasCtrl(props, "ctrl_Space", myActor) && kb.spaceKey.isPressed) brake = true;
 
-        vertical += netVertical;
-        horizontal += netHorizontal;
-        if (netBrake) brake = true;
+        float[] data = { v, h, brake ? 1f : 0f };
+
+        PhotonNetwork.RaiseEvent(INPUT_EVENT, data,
+            new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient },
+            new SendOptions { DeliveryMode = DeliveryMode.Unreliable });
+    }
+
+    private void GatherAllInput(ref float vertical, ref float horizontal, ref bool brake)
+    {
+        Keyboard kb = Keyboard.current;
+        var props = PhotonNetwork.CurrentRoom.CustomProperties;
+        int myActor = PhotonNetwork.LocalPlayer.ActorNumber;
+
+        if (kb != null)
+        {
+            if (HasCtrl(props, "ctrl_W", myActor) && kb.wKey.isPressed) vertical += 1f;
+            if (HasCtrl(props, "ctrl_S", myActor) && kb.sKey.isPressed) vertical -= 1f;
+            if (HasCtrl(props, "ctrl_A", myActor) && kb.aKey.isPressed) horizontal -= 1f;
+            if (HasCtrl(props, "ctrl_D", myActor) && kb.dKey.isPressed) horizontal += 1f;
+            if (HasCtrl(props, "ctrl_Space", myActor) && kb.spaceKey.isPressed) brake = true;
+        }
+
+        foreach (var kvp in remoteInputs)
+        {
+            float[] inp = kvp.Value;
+            vertical += inp[0];
+            horizontal += inp[1];
+            if (inp[2] > 0.5f) brake = true;
+        }
 
         vertical = Mathf.Clamp(vertical, -1f, 1f);
         horizontal = Mathf.Clamp(horizontal, -1f, 1f);
     }
 
-    private float GetKeyInput(Hashtable props, string ctrlKey, int myActor, Keyboard kb, KeyControl key, float value)
+    public void OnEvent(EventData photonEvent)
     {
-        if (kb == null || key == null) return 0f;
+        if (photonEvent.Code != INPUT_EVENT) return;
 
-        object val;
-        props.TryGetValue(ctrlKey, out val);
-        int owner = val != null ? (int)val : -1;
-
-        if (owner == myActor && key.isPressed)
-            return value;
-        return 0f;
+        float[] data = (float[])photonEvent.CustomData;
+        int sender = photonEvent.Sender;
+        remoteInputs[sender] = data;
     }
+
+    private bool HasCtrl(Hashtable props, string key, int actor)
+    {
+        object val;
+        props.TryGetValue(key, out val);
+        return val != null && (int)val == actor;
+    }
+
+    #endregion
+
+    #region Physics
 
     private float GetLocalVertical()
     {
@@ -173,9 +227,12 @@ public class CarControl : MonoBehaviourPun, IPunObservable
         }
     }
 
+    #endregion
+
+    #region Network Sync
+
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
-        if (rb == null) rb = GetComponent<Rigidbody>();
         if (rb == null) return;
 
         if (stream.IsWriting)
@@ -194,10 +251,5 @@ public class CarControl : MonoBehaviourPun, IPunObservable
         }
     }
 
-    public void ReceiveRemoteInput(float v, float h, bool brake)
-    {
-        netVertical = v;
-        netHorizontal = h;
-        netBrake = brake;
-    }
+    #endregion
 }
