@@ -166,24 +166,37 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     {
         if (rb == null) return;
         heldRb = rb;
-        heldRb.useGravity = false;
-        heldRb.linearDamping = 12f;
-        heldRb.angularDamping = 8f;
         isHolding = true;
         currentHoldDist = holdForward;
 
         heldPV = heldRb.GetComponent<PhotonView>();
         if (heldPV != null)
             heldPV.TransferOwnership(PhotonNetwork.LocalPlayer);
+
+        CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
+        if (sync != null)
+            sync.SetGrabbed(true);
+        else
+        {
+            heldRb.useGravity = false;
+            heldRb.linearDamping = 12f;
+            heldRb.angularDamping = 8f;
+        }
     }
 
     private void StopGrab()
     {
         if (heldRb != null)
         {
-            heldRb.useGravity = true;
-            heldRb.linearDamping = 0f;
-            heldRb.angularDamping = 0.05f;
+            CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
+            if (sync != null)
+                sync.SetGrabbed(false);
+            else
+            {
+                heldRb.useGravity = true;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0.05f;
+            }
         }
         heldRb = null;
         heldPV = null;
