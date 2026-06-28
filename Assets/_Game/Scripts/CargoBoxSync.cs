@@ -6,7 +6,7 @@ using UnityEngine;
 public class CargoBoxSync : MonoBehaviourPun, IPunObservable
 {
     private Rigidbody rb;
-    private bool syncGrabbed;
+    private bool isGrabbed;
 
     private void Awake()
     {
@@ -17,12 +17,20 @@ public class CargoBoxSync : MonoBehaviourPun, IPunObservable
     {
         if (photonView.IsMine) return;
 
-        rb.isKinematic = true;
+        if (isGrabbed)
+        {
+            rb.isKinematic = true;
+        }
+        else
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+        }
     }
 
     public void SetGrabbed(bool grabbed)
     {
-        syncGrabbed = grabbed;
+        isGrabbed = grabbed;
 
         if (photonView.IsMine)
         {
@@ -37,17 +45,11 @@ public class CargoBoxSync : MonoBehaviourPun, IPunObservable
     {
         if (stream.IsWriting)
         {
-            stream.SendNext(syncGrabbed);
+            stream.SendNext(isGrabbed);
         }
         else
         {
-            syncGrabbed = (bool)stream.ReceiveNext();
+            isGrabbed = (bool)stream.ReceiveNext();
         }
-    }
-
-    private void OnEnable()
-    {
-        if (photonView != null && !photonView.IsMine)
-            rb.isKinematic = true;
     }
 }
