@@ -16,6 +16,12 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     [SerializeField] private float maxHoldDist = 4f;
     [SerializeField] private float scrollSpeed = 0.5f;
 
+    public float ScrollSpeed
+    {
+        get => scrollSpeed;
+        set => scrollSpeed = value;
+    }
+
     [Header("IK")]
     [SerializeField] private float ikBlendSpeed = 10f;
 
@@ -57,6 +63,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             return;
         }
 
+        ToyController tc = GetComponent<ToyController>();
+        if (tc != null && tc.IsPaused) return;
+
         Mouse mouse = Mouse.current;
         if (mouse == null) return;
 
@@ -64,7 +73,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         if (!isHolding && pressing)
         {
-            ToyController tc = GetComponent<ToyController>();
             bool fps = tc != null && tc.IsFPS;
 
             Transform box = fps ? FindLookedAtBox() : FindClosestBox();

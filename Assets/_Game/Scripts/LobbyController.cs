@@ -35,8 +35,17 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [SerializeField] private float successDisplayTime = 3f;
     [SerializeField] private float successFadeTime = 1f;
 
+    [Header("Pause Panel")]
+    [SerializeField] private GameObject pausePanel;
+    [SerializeField] private Button exitRoomButton;
+    [SerializeField] private Button leaveRoomButton;
+    [SerializeField] private Button backButton;
+    [SerializeField] private Slider mouseSensitivitySlider;
+    [SerializeField] private Slider mouseWheelSensitivitySlider;
+
     private readonly Dictionary<int, GameObject> playerListEntries = new();
     private bool cargoCompleted;
+    private bool pauseOpen;
 
     private IEnumerator Start()
     {
@@ -46,6 +55,8 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
         if (successCargoText != null)
             successCargoText.gameObject.SetActive(false);
+
+        SetupPausePanel();
 
         while (!PhotonNetwork.InRoom ||
                !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("roomName"))
@@ -73,6 +84,107 @@ public class LobbyController : MonoBehaviourPunCallbacks
         if (!cargoCompleted)
             CheckAllCargoLoaded();
     }
+
+    #region Pause
+
+    private void SetupPausePanel()
+    {
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
+
+        if (exitRoomButton != null)
+        {
+            exitRoomButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
+            exitRoomButton.onClick.AddListener(OnExitRoomClicked);
+        }
+
+        if (leaveRoomButton != null)
+        {
+            leaveRoomButton.gameObject.SetActive(!PhotonNetwork.IsMasterClient);
+            leaveRoomButton.onClick.AddListener(OnLeaveRoomClicked);
+        }
+
+        if (mouseSensitivitySlider != null)
+        {
+            mouseSensitivitySlider.minValue = 0.5f;
+            mouseSensitivitySlider.maxValue = 10f;
+            mouseSensitivitySlider.value = 2f;
+            mouseSensitivitySlider.onValueChanged.AddListener(OnMouseSensitivityChanged);
+        }
+
+        if (mouseWheelSensitivitySlider != null)
+        {
+            mouseWheelSensitivitySlider.minValue = 1f;
+            mouseWheelSensitivitySlider.maxValue = 30f;
+            mouseWheelSensitivitySlider.value = 5f;
+            mouseWheelSensitivitySlider.onValueChanged.AddListener(OnMouseWheelSensitivityChanged);
+        }
+
+        if (backButton != null)
+            backButton.onClick.AddListener(() => { if (pauseOpen) TogglePause(); });
+    }
+
+    public void TogglePause()
+    {
+        pauseOpen = !pauseOpen;
+
+        if (pausePanel != null)
+            pausePanel.SetActive(pauseOpen);
+
+        ToyController localPlayer = FindLocalPlayer();
+        if (localPlayer != null)
+            localPlayer.SetPaused(pauseOpen);
+    }
+
+    private void OnExitRoomClicked()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        PhotonNetwork.CurrentRoom.IsOpen = false;
+        PhotonNetwork.CurrentRoom.IsVisible = false;
+        PhotonNetwork.CurrentRoom.SetCustomProperties(
+            new Hashtable { { "closed", true } }
+        );
+    }
+
+    private void OnLeaveRoomClicked()
+    {
+        PhotonNetwork.LeaveRoom();
+    }
+
+    private void OnMouseSensitivityChanged(float value)
+    {
+        ToyController localPlayer = FindLocalPlayer();
+        if (localPlayer != null)
+            localPlayer.MouseSensitivity = value;
+    }
+
+    private void OnMouseWheelSensitivityChanged(float value)
+    {
+        CargoPickup pickup = FindLocalPickup();
+        if (pickup != null)
+            pickup.ScrollSpeed = value;
+    }
+
+    private ToyController FindLocalPlayer()
+    {
+        foreach (ToyController tc in FindObjectsByType<ToyController>(FindObjectsSortMode.None))
+        {
+            if (tc.photonView.IsMine) return tc;
+        }
+        return null;
+    }
+
+    private CargoPickup FindLocalPickup()
+    {
+        foreach (CargoPickup cp in FindObjectsByType<CargoPickup>(FindObjectsSortMode.None))
+        {
+            if (cp.photonView.IsMine) return cp;
+        }
+        return null;
+    }
+
+    #endregion
 
     #region Physics Ignore
 

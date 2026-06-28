@@ -34,6 +34,7 @@ public class ToyController : MonoBehaviourPun
     private float yaw;
     private float pitch = 20f;
     private bool isFPS;
+    private bool isPaused;
 
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
@@ -41,8 +42,15 @@ public class ToyController : MonoBehaviourPun
     public bool IsGrounded { get; private set; }
     public float CurrentSpeed { get; private set; }
     public bool IsFPS => isFPS;
+    public bool IsPaused => isPaused;
     public float Yaw => yaw;
     public float Pitch => pitch;
+
+    public float MouseSensitivity
+    {
+        get => mouseSensitivity;
+        set => mouseSensitivity = value;
+    }
 
     private void Awake()
     {
@@ -101,10 +109,46 @@ public class ToyController : MonoBehaviourPun
     {
         if (!photonView.IsMine) return;
 
+        HandlePauseToggle();
+
+        if (isPaused) return;
+
         HandleCameraToggle();
         HandleCamera();
         HandleMovement();
         UpdateAnimator();
+    }
+
+    public void SetPaused(bool paused)
+    {
+        isPaused = paused;
+
+        if (paused)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            CurrentSpeed = 0f;
+            if (animator != null)
+                animator.SetFloat(SpeedHash, 0f);
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+    }
+
+    private void HandlePauseToggle()
+    {
+        Keyboard kb = Keyboard.current;
+        if (kb == null) return;
+
+        if (kb.escapeKey.wasPressedThisFrame)
+        {
+            var lobby = FindAnyObjectByType<LobbyController>();
+            if (lobby != null)
+                lobby.TogglePause();
+        }
     }
 
     private void HandleCameraToggle()
