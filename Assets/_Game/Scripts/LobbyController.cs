@@ -35,6 +35,12 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [SerializeField] private float successDisplayTime = 3f;
     [SerializeField] private float successFadeTime = 1f;
 
+    [Header("Join Game")]
+    [SerializeField] private Collider joinCylinderTrigger;
+
+    public List<GameObject> CargoBoxes => cargoBoxes;
+    public bool IsCargoCompleted => cargoCompleted;
+
     [Header("Pause Panel")]
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private Button exitRoomButton;
@@ -83,6 +89,27 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
         if (!cargoCompleted)
             CheckAllCargoLoaded();
+
+        if (cargoCompleted)
+            CheckJoinTrigger();
+    }
+
+    private void CheckJoinTrigger()
+    {
+        if (joinCylinderTrigger == null) return;
+
+        ToyController local = FindLocalPlayer();
+        if (local == null) return;
+
+        CharacterController cc = local.GetComponent<CharacterController>();
+        if (cc == null) return;
+
+        if (joinCylinderTrigger.bounds.Intersects(cc.bounds))
+        {
+            JoinGameController jgc = FindAnyObjectByType<JoinGameController>();
+            if (jgc != null)
+                jgc.ShowPanel();
+        }
     }
 
     #region Pause
