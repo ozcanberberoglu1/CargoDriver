@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using Photon.Pun;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class GameSceneController : MonoBehaviourPunCallbacks
 {
@@ -12,22 +13,66 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     [Header("Cargo Box Prefab")]
     [SerializeField] private GameObject cargoBoxPrefab;
 
+    private GameObject spawnedPickup;
+
     private IEnumerator Start()
     {
-        Debug.Log($"[GameScene] Start. InRoom={PhotonNetwork.InRoom} IsMaster={PhotonNetwork.IsMasterClient}");
-
         while (!PhotonNetwork.InRoom)
             yield return null;
 
         yield return new WaitForSeconds(1f);
 
-        Debug.Log($"[GameScene] Room ready. IsMaster={PhotonNetwork.IsMasterClient} Props count={PhotonNetwork.CurrentRoom.CustomProperties.Count}");
-
         if (PhotonNetwork.IsMasterClient)
-            SpawnPickupWithCargo();
+        {
+            spawnedPickup = SpawnPickupWithCargo();
+            if (spawnedPickup != null)
+                StartCoroutine(EnableCarPhysics(spawnedPickup));
+        }
     }
 
-    private void SpawnPickupWithCargo()
+    private void Update()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        if (spawnedPickup == null) return;
+
+        Keyboard kb = Keyboard.current;
+        if (kb != null && kb.rKey.wasPressedThisFrame)
+            ResetCar();
+    }
+
+    private void ResetCar()
+    {
+        Vector3 spawnPos = carSpawnArea != null ? carSpawnArea.position : Vector3.zero;
+        Quaternion spawnRot = carSpawnArea != null ? carSpawnArea.rotation : Quaternion.identity;
+
+        Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        spawnedPickup.transform.position = spawnPos;
+        spawnedPickup.transform.rotation = spawnRot;
+
+        StartCoroutine(EnableCarPhysics(spawnedPickup));
+    }
+
+    private IEnumerator EnableCarPhysics(GameObject pickup)
+    {
+        yield return new WaitForSeconds(1f);
+
+        Rigidbody rb = pickup.GetComponent<Rigidbody>();
+        if (rb != null)
+            rb.isKinematic = false;
+
+        CarControl cc = pickup.GetComponent<CarControl>();
+        if (cc != null)
+            cc.enabled = true;
+    }
+
+    private GameObject SpawnPickupWithCargo()
     {
         Vector3 spawnPos = carSpawnArea != null ? carSpawnArea.position : Vector3.zero;
 
@@ -35,10 +80,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (!props.ContainsKey("cargoData"))
         {
             Debug.LogError("[GameScene] cargoData NOT FOUND in room properties!");
-            return;
+            return null;
         }
-
-        Debug.Log($"[GameScene] cargoData found, spawning pickup at {spawnPos}");
 
         string data = props["cargoData"].ToString();
         string[] parts = data.Split(';');
@@ -54,13 +97,13 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         GameObject pickup = PhotonNetwork.InstantiateRoomObject(
             pickupPrefabName, spawnPos, pickupOrigRot);
 
-        CarControl cc = pickup.GetComponent<CarControl>();
-        if (cc != null)
-            cc.enabled = true;
-
         Rigidbody prb = pickup.GetComponent<Rigidbody>();
         if (prb != null)
-            prb.isKinematic = false;
+            prb.isKinematic = true;
+
+        CarControl cc = pickup.GetComponent<CarControl>();
+        if (cc != null)
+            cc.enabled = false;
 
         PhotonView pv = pickup.GetComponent<PhotonView>();
         if (pv != null && cc != null)
@@ -107,6 +150,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (cargoParent != null)
                 box.transform.SetParent(cargoParent, true);
         }
+
+        return pickup;
     }
 
     private Vector3 ParseVec3(string x, string y, string z)

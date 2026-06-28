@@ -53,6 +53,11 @@ public class LobbyController : MonoBehaviourPunCallbacks
     private bool cargoCompleted;
     private bool pauseOpen;
 
+    private void Awake()
+    {
+        FreezePickup();
+    }
+
     private IEnumerator Start()
     {
         closeRoomButton.onClick.AddListener(OnCloseRoomClicked);
@@ -74,7 +79,20 @@ public class LobbyController : MonoBehaviourPunCallbacks
         UpdatePlayerCount();
         SpawnPlayer();
         RebuildPlayerList();
-        SetupPhysicsIgnore();
+    }
+
+    private void FreezePickup()
+    {
+        GameObject pickup = GameObject.Find("Pickup");
+        if (pickup == null) return;
+
+        Rigidbody rb = pickup.GetComponent<Rigidbody>();
+        if (rb != null)
+            rb.isKinematic = true;
+
+        CarControl cc = pickup.GetComponent<CarControl>();
+        if (cc != null)
+            cc.enabled = false;
     }
 
     private void Update()
@@ -209,21 +227,6 @@ public class LobbyController : MonoBehaviourPunCallbacks
             if (cp.photonView.IsMine) return cp;
         }
         return null;
-    }
-
-    #endregion
-
-    #region Physics Ignore
-
-    private void SetupPhysicsIgnore()
-    {
-        GameObject pickup = GameObject.Find("Pickup");
-        if (pickup == null) return;
-
-        Rigidbody vehicleRb = pickup.GetComponent<Rigidbody>();
-        if (vehicleRb == null) vehicleRb = pickup.GetComponentInChildren<Rigidbody>();
-        if (vehicleRb != null)
-            vehicleRb.isKinematic = true;
     }
 
     #endregion
