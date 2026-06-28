@@ -304,28 +304,44 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     #region Network
 
+    private Vector3 syncHeldPos;
+
     private void RemoteSync()
     {
         float targetW = syncHolding ? 1f : 0f;
         ikWeight = Mathf.MoveTowards(ikWeight, targetW, Time.deltaTime * ikBlendSpeed);
 
-        if (syncHolding && syncHeldId >= 0 && heldRb == null)
+        if (syncHolding && syncHeldId >= 0)
         {
-            PhotonView pv = PhotonView.Find(syncHeldId);
-            if (pv != null)
+            if (heldRb == null)
             {
-                heldRb = pv.GetComponent<Rigidbody>();
-                isHolding = true;
-                Debug.Log($"[CargoPickup] REMOTE: found held obj ViewID={syncHeldId} name={heldRb?.gameObject.name}");
+                PhotonView pv = PhotonView.Find(syncHeldId);
+                if (pv != null)
+                {
+                    heldRb = pv.GetComponent<Rigidbody>();
+                    isHolding = true;
+
+                    if (heldRb != null)
+                    {
+                        heldRb.isKinematic = true;
+                        heldRb.useGravity = false;
+                    }
+                }
             }
-            else
+
+            if (heldRb != null)
             {
-                Debug.LogWarning($"[CargoPickup] REMOTE: PhotonView.Find({syncHeldId}) returned NULL");
+                heldRb.transform.position = Vector3.Lerp(
+                    heldRb.transform.position, syncHeldPos, Time.deltaTime * 15f);
             }
         }
         else if (!syncHolding && isHolding)
         {
-            Debug.Log($"[CargoPickup] REMOTE: release detected");
+            if (heldRb != null)
+            {
+                heldRb.isKinematic = false;
+                heldRb.useGravity = true;
+            }
             heldRb = null;
             heldPV = null;
             isHolding = false;
@@ -343,13 +359,18 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (stream.IsWriting)
         {
             stream.SendNext(isHolding);
-            int vid = heldPV != null ? heldPV.ViewID : -1;
-            stream.SendNext(vid);
+            stream.SendNext(heldPV != null ? heldPV.ViewID : -1);
+
+            if (isHolding && heldRb != null)
+                stream.SendNext(heldRb.position);
+            else
+                stream.SendNext(Vector3.zero);
         }
         else
         {
             syncHolding = (bool)stream.ReceiveNext();
             syncHeldId = (int)stream.ReceiveNext();
+            syncHeldPos = (Vector3)stream.ReceiveNext();
         }
     }
 
