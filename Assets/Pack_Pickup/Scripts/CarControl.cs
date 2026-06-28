@@ -79,6 +79,17 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             rb.position = Vector3.Lerp(rb.position, syncPos, Time.fixedDeltaTime * 10f);
             rb.rotation = Quaternion.Lerp(rb.rotation, syncRot, Time.fixedDeltaTime * 10f);
             rb.linearVelocity = syncVel;
+
+            if (steeringWheel != null)
+                steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
+
+            for (int i = 0; i < wheels.Length; i++)
+            {
+                WheelCollider wc = wheels[i].GetComponent<WheelCollider>();
+                if (i < 2)
+                    wc.steerAngle = currentTurnAngle;
+            }
+
             UpdateWheelMeshes();
         }
     }
