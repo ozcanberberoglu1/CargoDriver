@@ -28,13 +28,24 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [SerializeField] private Transform playerListContent;
     [SerializeField] private GameObject playerListPrefab;
 
+    [Header("Cargo")]
+    [SerializeField] private List<GameObject> cargoBoxes;
+    [SerializeField] private Collider truckTrigger;
+    [SerializeField] private TextMeshProUGUI successCargoText;
+    [SerializeField] private float successDisplayTime = 3f;
+    [SerializeField] private float successFadeTime = 1f;
+
     private readonly Dictionary<int, GameObject> playerListEntries = new();
+    private bool cargoCompleted;
 
     private IEnumerator Start()
     {
         closeRoomButton.onClick.AddListener(OnCloseRoomClicked);
         closeRoomButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
         playersPanel.SetActive(false);
+
+        if (successCargoText != null)
+            successCargoText.gameObject.SetActive(false);
 
         while (!PhotonNetwork.InRoom ||
                !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("roomName"))
@@ -46,6 +57,7 @@ public class LobbyController : MonoBehaviourPunCallbacks
         UpdatePlayerCount();
         SpawnPlayer();
         RebuildPlayerList();
+        SetupPhysicsIgnore();
     }
 
     private void Update()
@@ -57,7 +69,74 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
         if (playersPanel.activeSelf)
             UpdateAllPings();
+
+        if (!cargoCompleted)
+            CheckAllCargoLoaded();
     }
+
+    #region Physics Ignore
+
+    private void SetupPhysicsIgnore()
+    {
+        GameObject pickup = GameObject.Find("Pickup");
+        if (pickup == null) return;
+
+        Rigidbody vehicleRb = pickup.GetComponent<Rigidbody>();
+        if (vehicleRb == null) vehicleRb = pickup.GetComponentInChildren<Rigidbody>();
+        if (vehicleRb != null)
+            vehicleRb.isKinematic = true;
+    }
+
+    #endregion
+
+    #region Cargo Check
+
+    private void CheckAllCargoLoaded()
+    {
+        if (truckTrigger == null || cargoBoxes == null || cargoBoxes.Count == 0) return;
+
+        foreach (GameObject box in cargoBoxes)
+        {
+            if (box == null) return;
+
+            Collider boxCol = box.GetComponent<Collider>();
+            if (boxCol == null) return;
+
+            if (!truckTrigger.bounds.Intersects(boxCol.bounds))
+                return;
+        }
+
+        cargoCompleted = true;
+        StartCoroutine(ShowSuccessMessage());
+    }
+
+    private IEnumerator ShowSuccessMessage()
+    {
+        if (successCargoText == null) yield break;
+
+        successCargoText.gameObject.SetActive(true);
+
+        Color c = successCargoText.color;
+        c.a = 1f;
+        successCargoText.color = c;
+
+        yield return new WaitForSeconds(successDisplayTime);
+
+        float elapsed = 0f;
+        while (elapsed < successFadeTime)
+        {
+            elapsed += Time.deltaTime;
+            c.a = 1f - (elapsed / successFadeTime);
+            successCargoText.color = c;
+            yield return null;
+        }
+
+        c.a = 0f;
+        successCargoText.color = c;
+        successCargoText.gameObject.SetActive(false);
+    }
+
+    #endregion
 
     #region Player List
 

@@ -78,6 +78,7 @@ GameObject:
   - component: {fileID: 2791334731537681316}
   - component: {fileID: 1589120468232145421}
   - component: {fileID: 2476584638018360042}
+  - component: {fileID: 250211047129784014}
   m_Layer: 0
   m_Name: Toy1
   m_TagString: Untagged
@@ -150,6 +151,7 @@ MonoBehaviour:
   ObservedComponents:
   - {fileID: 1536221605920421362}
   - {fileID: 2476584638018360042}
+  - {fileID: 250211047129784014}
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
@@ -191,6 +193,10 @@ MonoBehaviour:
   cameraHeight: 2.24
   minPitch: -2.15
   maxPitch: 60
+  fpsOffset: {x: 0, y: 1.6, z: 0.2}
+  fpsMinPitch: -80
+  fpsMaxPitch: 80
+  cursorUI: {fileID: 0}
 --- !u!95 &1589120468232145421
 Animator:
   serializedVersion: 7
@@ -237,6 +243,29 @@ MonoBehaviour:
   m_SynchronizeLayers:
   - SynchronizeType: 0
     LayerIndex: 0
+--- !u!114 &250211047129784014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196258718472826064}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00d737783378441f9878fe31f442091e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CargoPickup
+  detectRange: 4
+  grabDistance: 4
+  holdForward: 1.2
+  holdUp: 1.2
+  cargoLayer:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  minHoldDist: 1
+  maxHoldDist: 4
+  scrollSpeed: 20
+  ikBlendSpeed: 5
 --- !u!1 &395683921927027890
 GameObject:
   m_ObjectHideFlags: 0

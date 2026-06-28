@@ -12,7 +12,7 @@ public class ToyController : MonoBehaviourPun
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -20f;
 
-    [Header("Camera")]
+    [Header("TPS Camera")]
     [SerializeField] private Camera playerCamera;
     [SerializeField] private float mouseSensitivity = 2f;
     [SerializeField] private float cameraDistance = 5f;
@@ -20,17 +20,29 @@ public class ToyController : MonoBehaviourPun
     [SerializeField] private float minPitch = -10f;
     [SerializeField] private float maxPitch = 60f;
 
+    [Header("FPS Camera")]
+    [SerializeField] private Vector3 fpsOffset = new(0f, 1.6f, 0.2f);
+    [SerializeField] private float fpsMinPitch = -80f;
+    [SerializeField] private float fpsMaxPitch = 80f;
+
+    [Header("Crosshair")]
+    [SerializeField] private GameObject cursorUI;
+
     private CharacterController controller;
     private Animator animator;
     private Vector3 velocity;
     private float yaw;
     private float pitch = 20f;
+    private bool isFPS;
 
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
 
     public bool IsGrounded { get; private set; }
     public float CurrentSpeed { get; private set; }
+    public bool IsFPS => isFPS;
+    public float Yaw => yaw;
+    public float Pitch => pitch;
 
     private void Awake()
     {
@@ -59,6 +71,23 @@ public class ToyController : MonoBehaviourPun
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
+        if (cursorUI == null)
+        {
+            Canvas[] allCanvas = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (Canvas c in allCanvas)
+            {
+                Transform t = c.transform.Find("Cursor");
+                if (t != null)
+                {
+                    cursorUI = t.gameObject;
+                    break;
+                }
+            }
+        }
+
+        if (cursorUI != null)
+            cursorUI.SetActive(false);
+
         DisableSceneCameras();
         SetPlayerName();
     }
@@ -72,9 +101,29 @@ public class ToyController : MonoBehaviourPun
     {
         if (!photonView.IsMine) return;
 
+        HandleCameraToggle();
         HandleCamera();
         HandleMovement();
         UpdateAnimator();
+    }
+
+    private void HandleCameraToggle()
+    {
+        Keyboard kb = Keyboard.current;
+        if (kb == null) return;
+
+        if (kb.cKey.wasPressedThisFrame)
+        {
+            isFPS = !isFPS;
+
+            if (cursorUI != null)
+                cursorUI.SetActive(isFPS);
+
+            if (isFPS)
+                pitch = Mathf.Clamp(pitch, fpsMinPitch, fpsMaxPitch);
+
+            SetOwnMeshVisibility(!isFPS);
+        }
     }
 
     private void HandleCamera()
@@ -85,19 +134,32 @@ public class ToyController : MonoBehaviourPun
         Vector2 delta = mouse.delta.ReadValue();
         yaw += delta.x * mouseSensitivity * 0.1f;
         pitch -= delta.y * mouseSensitivity * 0.1f;
-        pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+
+        if (isFPS)
+            pitch = Mathf.Clamp(pitch, fpsMinPitch, fpsMaxPitch);
+        else
+            pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
     }
 
     private void LateUpdate()
     {
         if (!photonView.IsMine || playerCamera == null) return;
 
-        Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
-        Vector3 offset = rotation * new Vector3(0f, 0f, -cameraDistance);
-        Vector3 target = transform.position + Vector3.up * cameraHeight;
+        if (isFPS)
+        {
+            Vector3 headPos = transform.position + transform.TransformVector(fpsOffset);
+            playerCamera.transform.position = headPos;
+            playerCamera.transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
+        }
+        else
+        {
+            Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
+            Vector3 offset = rotation * new Vector3(0f, 0f, -cameraDistance);
+            Vector3 target = transform.position + Vector3.up * cameraHeight;
 
-        playerCamera.transform.position = target + offset;
-        playerCamera.transform.LookAt(target);
+            playerCamera.transform.position = target + offset;
+            playerCamera.transform.LookAt(target);
+        }
     }
 
     private void HandleMovement()
@@ -153,6 +215,17 @@ public class ToyController : MonoBehaviourPun
             if (cam == playerCamera) continue;
             if (cam.GetComponentInParent<ToyController>() != null) continue;
             cam.gameObject.SetActive(false);
+        }
+    }
+
+    private void SetOwnMeshVisibility(bool visible)
+    {
+        foreach (Renderer r in GetComponentsInChildren<Renderer>())
+        {
+            if (r is SkinnedMeshRenderer || r is MeshRenderer)
+                r.shadowCastingMode = visible
+                    ? UnityEngine.Rendering.ShadowCastingMode.On
+                    : UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
         }
     }
 
