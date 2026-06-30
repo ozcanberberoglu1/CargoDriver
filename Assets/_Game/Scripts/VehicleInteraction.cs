@@ -12,6 +12,7 @@ public class VehicleInteraction : MonoBehaviour
     private GameObject cursorUI;
     private bool isInCar = true;
     private bool isBehindPlayer;
+    private Transform behindAnchor;
 
     private System.Collections.IEnumerator Start()
     {
@@ -80,9 +81,15 @@ public class VehicleInteraction : MonoBehaviour
             carCam.gameObject.SetActive(false);
 
         Transform spawnPoint = pickup.transform.Find("PlayerCarSpawn");
-        Transform parent = spawnPoint != null ? spawnPoint : pickup.transform;
-        spawnedPlayer.transform.SetParent(parent, true);
-        spawnedPlayer.transform.localPosition = Vector3.zero;
+        behindAnchor = spawnPoint != null ? spawnPoint : pickup.transform;
+        spawnedPlayer.transform.position = behindAnchor.position;
+    }
+
+    private void LateUpdate()
+    {
+        if (!isBehindPlayer || spawnedPlayer == null || behindAnchor == null) return;
+
+        spawnedPlayer.transform.position = behindAnchor.position;
     }
 
     private void Update()
