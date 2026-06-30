@@ -178,15 +178,21 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 box.transform.rotation = worldRot;
             }
 
-            box.transform.localScale = scale;
+            box.transform.localScale = Vector3.one;
             box.name = $"CargoBox_{i}";
-
-            Rigidbody rb = box.GetComponent<Rigidbody>();
-            if (rb == null) rb = box.AddComponent<Rigidbody>();
-            rb.isKinematic = true;
 
             if (cargoParent != null)
                 box.transform.SetParent(cargoParent, true);
+
+            Rigidbody rb = box.GetComponent<Rigidbody>();
+            if (rb == null) rb = box.AddComponent<Rigidbody>();
+            rb.isKinematic = false;
+            rb.useGravity = true;
+            rb.mass = 2f;
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+            Collider col = box.GetComponent<Collider>();
+            if (col == null) box.AddComponent<BoxCollider>();
         }
     }
 
