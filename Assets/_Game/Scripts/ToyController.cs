@@ -93,8 +93,10 @@ public class ToyController : MonoBehaviourPun
             }
         }
 
+        isFPS = true;
         if (cursorUI != null)
-            cursorUI.SetActive(false);
+            cursorUI.SetActive(true);
+        SetOwnMeshVisibility(false);
 
         DisableSceneCameras();
         SetPlayerName();
