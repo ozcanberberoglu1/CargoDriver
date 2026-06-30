@@ -197,13 +197,21 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
             Rigidbody rb = box.GetComponent<Rigidbody>();
             if (rb == null) rb = box.AddComponent<Rigidbody>();
-            rb.isKinematic = false;
-            rb.useGravity = true;
-            rb.mass = 2f;
-            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
             Collider col = box.GetComponent<Collider>();
             if (col == null) box.AddComponent<BoxCollider>();
+
+            if (PhotonNetwork.IsMasterClient)
+            {
+                rb.isKinematic = false;
+                rb.useGravity = true;
+                rb.mass = 2f;
+                rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            }
+            else
+            {
+                rb.isKinematic = true;
+            }
         }
     }
 

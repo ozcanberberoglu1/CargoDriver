@@ -43,6 +43,13 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             syncPos = rb.position;
             syncRot = rb.rotation;
         }
+
+        if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
+        {
+            rb.isKinematic = true;
+            foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>())
+                wc.enabled = false;
+        }
     }
 
     void OnEnable()
@@ -76,21 +83,26 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         }
         else
         {
-            rb.position = Vector3.Lerp(rb.position, syncPos, Time.fixedDeltaTime * 10f);
-            rb.rotation = Quaternion.Lerp(rb.rotation, syncRot, Time.fixedDeltaTime * 10f);
-            rb.linearVelocity = syncVel;
+            transform.position = Vector3.Lerp(transform.position, syncPos, Time.fixedDeltaTime * 15f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, syncRot, Time.fixedDeltaTime * 15f);
 
             if (steeringWheel != null)
                 steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
 
-            for (int i = 0; i < wheels.Length; i++)
+            for (int i = 0; i < wheelMeshes.Length && i < wheels.Length; i++)
             {
                 WheelCollider wc = wheels[i].GetComponent<WheelCollider>();
-                if (i < 2)
-                    wc.steerAngle = currentTurnAngle;
-            }
+                Vector3 pos = wheelMeshes[i].position;
+                Quaternion rot = wheelMeshes[i].rotation;
 
-            UpdateWheelMeshes();
+                if (i < 2)
+                {
+                    rot = transform.rotation * Quaternion.Euler(0f, currentTurnAngle, 0f);
+                }
+
+                wheelMeshes[i].position = wheels[i].position;
+                wheelMeshes[i].rotation = rot;
+            }
         }
     }
 
