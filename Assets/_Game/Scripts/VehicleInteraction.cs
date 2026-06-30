@@ -52,15 +52,18 @@ public class VehicleInteraction : MonoBehaviour
 
     private void SpawnBehindVehicle()
     {
-        spawnedPlayer = PhotonNetwork.Instantiate(playerPrefabName, Vector3.zero, Quaternion.identity);
-
-        ToyController tc = spawnedPlayer.GetComponent<ToyController>();
-        if (tc != null)
-            tc.SetMovementLocked(true);
+        spawnedPlayer = PhotonNetwork.Instantiate(playerPrefabName, new Vector3(0f, -100f, 0f), Quaternion.identity);
 
         CharacterController cc = spawnedPlayer.GetComponent<CharacterController>();
         if (cc != null)
             cc.enabled = false;
+
+        foreach (Collider col in spawnedPlayer.GetComponentsInChildren<Collider>())
+            col.isTrigger = true;
+
+        ToyController tc = spawnedPlayer.GetComponent<ToyController>();
+        if (tc != null)
+            tc.SetMovementLocked(true);
 
         CargoPickup cp = spawnedPlayer.GetComponent<CargoPickup>();
         if (cp != null)

@@ -64,6 +64,8 @@ public class ToyController : MonoBehaviourPun
 
     private void Start()
     {
+        SetPlayerLayer();
+
         if (!photonView.IsMine)
         {
             if (playerCamera != null)
@@ -276,6 +278,20 @@ public class ToyController : MonoBehaviourPun
             if (cam.GetComponentInParent<ToyController>() != null) continue;
             cam.gameObject.SetActive(false);
         }
+    }
+
+    private void SetPlayerLayer()
+    {
+        int playerLayer = LayerMask.NameToLayer("Player");
+        if (playerLayer < 0) return;
+
+        gameObject.layer = playerLayer;
+        foreach (Transform child in GetComponentsInChildren<Transform>(true))
+            child.gameObject.layer = playerLayer;
+
+        int vehicleLayer = LayerMask.NameToLayer("Vehicle");
+        if (vehicleLayer >= 0)
+            Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, true);
     }
 
     private void SetOwnMeshVisibility(bool visible)
