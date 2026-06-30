@@ -32,6 +32,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         {
             StartCoroutine(WaitAndSpawnCargo());
         }
+
+        GameObject go = new GameObject("VehicleInteraction_Local");
+        go.AddComponent<VehicleInteraction>();
     }
 
     private IEnumerator WaitAndSpawnCargo()
@@ -95,6 +98,14 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         CarControl cc = pickup.GetComponent<CarControl>();
         if (cc != null)
             cc.enabled = true;
+
+        Transform cargoBoxes = pickup.transform.Find("CargoBoxes");
+        if (cargoBoxes != null)
+        {
+            BoxCollider bc = cargoBoxes.GetComponent<BoxCollider>();
+            if (bc != null)
+                Destroy(bc);
+        }
     }
 
     private GameObject SpawnPickupWithCargo()

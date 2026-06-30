@@ -5,8 +5,8 @@ using UnityEngine.InputSystem;
 public class CargoPickup : MonoBehaviourPun, IPunObservable
 {
     [Header("Grab")]
-    [SerializeField] private float detectRange = 2.5f;
-    [SerializeField] private float grabDistance = 0.5f;
+    [SerializeField] public float detectRange = 2.5f;
+    [SerializeField] public float grabDistance = 0.5f;
     [SerializeField] private float holdForward = 0.7f;
     [SerializeField] private float holdUp = 0.6f;
     [SerializeField] private LayerMask cargoLayer = ~0;
@@ -75,12 +75,21 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             bool fps = tc != null && tc.IsFPS;
 
-            Transform box = fps ? FindLookedAtBox() : FindClosestBox();
-            if (box != null)
+            if (fps)
             {
-                float d = Vector3.Distance(rHand.position, box.position);
-                if (d < grabDistance)
+                Transform box = FindLookedAtBox();
+                if (box != null)
                     StartGrab(box.GetComponent<Rigidbody>());
+            }
+            else
+            {
+                Transform box = FindClosestBox();
+                if (box != null)
+                {
+                    float d = Vector3.Distance(rHand.position, box.position);
+                    if (d < grabDistance)
+                        StartGrab(box.GetComponent<Rigidbody>());
+                }
             }
         }
         else if (isHolding && !pressing)

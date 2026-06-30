@@ -24,11 +24,15 @@ public class JoinGameController : MonoBehaviourPunCallbacks
     [SerializeField] private Button dButton;
     [SerializeField] private Button spaceButton;
 
+    [Header("Behind Vehicle")]
+    [SerializeField] private Button behindVehicleButton;
+
     [Header("Action Buttons")]
     [SerializeField] private Button readyButton;
     [SerializeField] private Button goButton;
 
     private static readonly string[] ControlKeys = { "ctrl_W", "ctrl_A", "ctrl_S", "ctrl_D", "ctrl_Space" };
+    private const string BehindKey = "ctrl_Behind";
     private Button[] controlButtons;
     private readonly Dictionary<int, GameObject> joinPlayerEntries = new();
     private bool panelActive;
@@ -51,6 +55,9 @@ public class JoinGameController : MonoBehaviourPunCallbacks
             controlButtons[i].onClick.AddListener(() => OnControlButtonClicked(idx));
         }
 
+        if (behindVehicleButton != null)
+            behindVehicleButton.onClick.AddListener(OnBehindVehicleClicked);
+
         readyButton.onClick.AddListener(OnReadyClicked);
 
         if (goButton != null)
@@ -72,6 +79,9 @@ public class JoinGameController : MonoBehaviourPunCallbacks
             if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key))
                 init[key] = -1;
         }
+        if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(BehindKey))
+            init[BehindKey] = -1;
+
         if (init.Count > 0)
             PhotonNetwork.CurrentRoom.SetCustomProperties(init);
     }
@@ -112,7 +122,43 @@ public class JoinGameController : MonoBehaviourPunCallbacks
         }
         else if (current == -1)
         {
-            PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable { { key, myActor } });
+            Hashtable updates = new() { { key, myActor } };
+
+            object behindVal;
+            PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(BehindKey, out behindVal);
+            if (behindVal != null && (int)behindVal == myActor)
+                updates[BehindKey] = -1;
+
+            PhotonNetwork.CurrentRoom.SetCustomProperties(updates);
+        }
+    }
+
+    private void OnBehindVehicleClicked()
+    {
+        int myActor = PhotonNetwork.LocalPlayer.ActorNumber;
+
+        object val;
+        PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(BehindKey, out val);
+        int current = val != null ? (int)val : -1;
+
+        if (current == myActor)
+        {
+            PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable { { BehindKey, -1 } });
+        }
+        else if (current == -1)
+        {
+            Hashtable updates = new() { { BehindKey, myActor } };
+
+            var props = PhotonNetwork.CurrentRoom.CustomProperties;
+            foreach (string ctrlKey in ControlKeys)
+            {
+                object ctrlVal;
+                props.TryGetValue(ctrlKey, out ctrlVal);
+                if (ctrlVal != null && (int)ctrlVal == myActor)
+                    updates[ctrlKey] = -1;
+            }
+
+            PhotonNetwork.CurrentRoom.SetCustomProperties(updates);
         }
     }
 
@@ -152,6 +198,42 @@ public class JoinGameController : MonoBehaviourPunCallbacks
                 controlButtons[i].interactable = false;
                 if (nameText) nameText.text = GetPlayerName(owner);
             }
+        }
+
+        RefreshBehindButton(myActor, props);
+    }
+
+    private void RefreshBehindButton(int myActor, Hashtable props)
+    {
+        if (behindVehicleButton == null) return;
+
+        object val;
+        props.TryGetValue(BehindKey, out val);
+        int owner = val != null ? (int)val : -1;
+
+        Image img = behindVehicleButton.GetComponent<Image>();
+        Transform playerNameT = behindVehicleButton.transform.Find("PlayerName");
+        TextMeshProUGUI nameText = playerNameT != null
+            ? playerNameT.GetComponent<TextMeshProUGUI>()
+            : null;
+
+        if (owner == -1)
+        {
+            if (img) img.color = unlockedColor;
+            behindVehicleButton.interactable = true;
+            if (nameText) nameText.text = "Empty";
+        }
+        else if (owner == myActor)
+        {
+            if (img) img.color = lockedByMeColor;
+            behindVehicleButton.interactable = true;
+            if (nameText) nameText.text = GetPlayerName(myActor);
+        }
+        else
+        {
+            if (img) img.color = lockedByOtherColor;
+            behindVehicleButton.interactable = false;
+            if (nameText) nameText.text = GetPlayerName(owner);
         }
     }
 
@@ -361,6 +443,11 @@ public class JoinGameController : MonoBehaviourPunCallbacks
             if (val != null && (int)val == actorNumber)
                 clear[key] = -1;
         }
+
+        object behindVal;
+        props.TryGetValue(BehindKey, out behindVal);
+        if (behindVal != null && (int)behindVal == actorNumber)
+            clear[BehindKey] = -1;
 
         string readyKey = $"ready_{actorNumber}";
         clear[readyKey] = false;

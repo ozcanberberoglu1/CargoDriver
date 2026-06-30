@@ -35,6 +35,7 @@ public class ToyController : MonoBehaviourPun
     private float pitch = 20f;
     private bool isFPS;
     private bool isPaused;
+    private bool movementLocked;
 
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
@@ -107,6 +108,11 @@ public class ToyController : MonoBehaviourPun
         SetPlayerName();
     }
 
+    public void SetMovementLocked(bool locked)
+    {
+        movementLocked = locked;
+    }
+
     private void Update()
     {
         if (!photonView.IsMine) return;
@@ -117,8 +123,16 @@ public class ToyController : MonoBehaviourPun
 
         HandleCameraToggle();
         HandleCamera();
-        HandleMovement();
-        UpdateAnimator();
+
+        if (!movementLocked)
+        {
+            HandleMovement();
+            UpdateAnimator();
+        }
+        else
+        {
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        }
     }
 
     public void SetPaused(bool paused)
