@@ -21,6 +21,10 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     private Rigidbody rb;
     private float currentTurnAngle;
 
+    private Transform[] cargoBoxTransforms;
+    private Vector3[] syncCargoPos;
+    private Quaternion[] syncCargoRot;
+
     private Vector3 syncPos;
     private Quaternion syncRot;
     private Vector3 syncVel;
@@ -50,6 +54,30 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>())
                 wc.enabled = false;
         }
+
+        StartCoroutine(FindCargoBoxes());
+    }
+
+    private System.Collections.IEnumerator FindCargoBoxes()
+    {
+        yield return new WaitForSeconds(3f);
+
+        var list = new System.Collections.Generic.List<Transform>();
+        foreach (Transform child in transform)
+        {
+            FindCargoRecursive(child, list);
+        }
+        cargoBoxTransforms = list.ToArray();
+        syncCargoPos = new Vector3[cargoBoxTransforms.Length];
+        syncCargoRot = new Quaternion[cargoBoxTransforms.Length];
+    }
+
+    private void FindCargoRecursive(Transform t, System.Collections.Generic.List<Transform> list)
+    {
+        if (t.name.StartsWith("CargoBox"))
+            list.Add(t);
+        foreach (Transform child in t)
+            FindCargoRecursive(child, list);
     }
 
     void OnEnable()
@@ -264,6 +292,22 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             stream.SendNext(rb.rotation);
             stream.SendNext(rb.linearVelocity);
             stream.SendNext(currentTurnAngle);
+
+            int boxCount = cargoBoxTransforms != null ? cargoBoxTransforms.Length : 0;
+            stream.SendNext(boxCount);
+            for (int i = 0; i < boxCount; i++)
+            {
+                if (cargoBoxTransforms[i] != null)
+                {
+                    stream.SendNext(cargoBoxTransforms[i].localPosition);
+                    stream.SendNext(cargoBoxTransforms[i].localRotation);
+                }
+                else
+                {
+                    stream.SendNext(Vector3.zero);
+                    stream.SendNext(Quaternion.identity);
+                }
+            }
         }
         else
         {
@@ -271,6 +315,34 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             syncRot = (Quaternion)stream.ReceiveNext();
             syncVel = (Vector3)stream.ReceiveNext();
             currentTurnAngle = (float)stream.ReceiveNext();
+
+            int boxCount = (int)stream.ReceiveNext();
+            if (syncCargoPos == null || syncCargoPos.Length != boxCount)
+            {
+                syncCargoPos = new Vector3[boxCount];
+                syncCargoRot = new Quaternion[boxCount];
+            }
+            for (int i = 0; i < boxCount; i++)
+            {
+                syncCargoPos[i] = (Vector3)stream.ReceiveNext();
+                syncCargoRot[i] = (Quaternion)stream.ReceiveNext();
+            }
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (PhotonNetwork.IsMasterClient) return;
+        if (cargoBoxTransforms == null || syncCargoPos == null) return;
+
+        int count = Mathf.Min(cargoBoxTransforms.Length, syncCargoPos.Length);
+        for (int i = 0; i < count; i++)
+        {
+            if (cargoBoxTransforms[i] == null) continue;
+            cargoBoxTransforms[i].localPosition = Vector3.Lerp(
+                cargoBoxTransforms[i].localPosition, syncCargoPos[i], Time.deltaTime * 15f);
+            cargoBoxTransforms[i].localRotation = Quaternion.Slerp(
+                cargoBoxTransforms[i].localRotation, syncCargoRot[i], Time.deltaTime * 15f);
         }
     }
 
