@@ -339,10 +339,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         for (int i = 0; i < count; i++)
         {
             if (cargoBoxTransforms[i] == null) continue;
-            cargoBoxTransforms[i].localPosition = Vector3.Lerp(
-                cargoBoxTransforms[i].localPosition, syncCargoPos[i], Time.deltaTime * 15f);
-            cargoBoxTransforms[i].localRotation = Quaternion.Slerp(
-                cargoBoxTransforms[i].localRotation, syncCargoRot[i], Time.deltaTime * 15f);
+            cargoBoxTransforms[i].localPosition = syncCargoPos[i];
+            cargoBoxTransforms[i].localRotation = syncCargoRot[i];
         }
     }
 
