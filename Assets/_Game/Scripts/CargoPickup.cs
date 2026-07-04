@@ -320,10 +320,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     #region Network
 
-    private Vector3 syncHeldPos;
-    private Vector3 heldPosFrom, heldPosTo, heldVelocity;
-    private float heldInterpTime;
-    private float heldInterpDuration = 0.033f;
+    private Vector3 syncHeldTargetPos;
+    private Vector3 heldSmoothVel;
 
     private void RemoteSync()
     {
@@ -351,13 +349,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
             if (heldRb != null)
             {
-                heldInterpTime += Time.deltaTime;
-                float t = Mathf.Clamp01(heldInterpTime / heldInterpDuration);
-
-                if (t < 1f)
-                    heldRb.transform.position = Vector3.Lerp(heldPosFrom, heldPosTo, t);
-                else
-                    heldRb.transform.position = heldPosTo + heldVelocity * (heldInterpTime - heldInterpDuration);
+                heldRb.transform.position = Vector3.SmoothDamp(
+                    heldRb.transform.position, syncHeldTargetPos, ref heldSmoothVel, 0.04f);
             }
         }
         else if (!syncHolding && isHolding)
@@ -396,15 +389,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             syncHolding = (bool)stream.ReceiveNext();
             syncHeldId = (int)stream.ReceiveNext();
-
-            Vector3 prevTo = heldPosTo;
-            syncHeldPos = (Vector3)stream.ReceiveNext();
-
-            heldPosFrom = heldRb != null ? heldRb.transform.position : syncHeldPos;
-            heldPosTo = syncHeldPos;
-            heldVelocity = (heldPosTo - prevTo) / heldInterpDuration;
-            heldInterpDuration = 1f / PhotonNetwork.SerializationRate;
-            heldInterpTime = 0f;
+            syncHeldTargetPos = (Vector3)stream.ReceiveNext();
         }
     }
 
