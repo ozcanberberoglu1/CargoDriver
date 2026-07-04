@@ -26,6 +26,7 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     // Interpolation buffer
     private Vector3 posFrom, posTo;
     private Quaternion rotFrom, rotTo;
+    private Vector3 velocity;
     private Vector3[][] cargoFromPos, cargoToPos;
     private Quaternion[][] cargoFromRot, cargoToRot;
     private float interpTime;
@@ -138,8 +139,15 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         interpTime += Time.deltaTime;
         float t = interpDuration > 0f ? Mathf.Clamp01(interpTime / interpDuration) : 1f;
 
-        transform.position = Vector3.Lerp(posFrom, posTo, t);
-        transform.rotation = Quaternion.Slerp(rotFrom, rotTo, t);
+        if (t < 1f)
+        {
+            transform.position = Vector3.Lerp(posFrom, posTo, t);
+        }
+        else
+        {
+            transform.position = posTo + velocity * (interpTime - interpDuration);
+        }
+        transform.rotation = Quaternion.Slerp(rotFrom, rotTo, Mathf.Min(t, 1f));
 
         if (steeringWheel != null)
             steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
@@ -337,14 +345,15 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         }
         else
         {
+            Vector3 prevTo = posTo;
             posFrom = transform.position;
             rotFrom = transform.rotation;
             posTo = (Vector3)stream.ReceiveNext();
             rotTo = (Quaternion)stream.ReceiveNext();
             currentTurnAngle = (float)stream.ReceiveNext();
 
-            float lag = Mathf.Abs((float)(PhotonNetwork.Time - info.SentServerTime));
-            interpDuration = Mathf.Max(lag, 0.033f);
+            velocity = (posTo - prevTo) / interpDuration;
+            interpDuration = 1f / PhotonNetwork.SerializationRate;
             interpTime = 0f;
 
             int boxCount = (int)stream.ReceiveNext();

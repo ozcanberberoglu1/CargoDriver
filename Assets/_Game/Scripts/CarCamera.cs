@@ -37,6 +37,7 @@ public class CarCamera : MonoBehaviour
     private float interiorPitch;
     private readonly System.Collections.Generic.List<object> allAngles = new();
     private Vector3 smoothVelocity;
+    private Vector3 smoothTarget;
 
     private void Start()
     {
@@ -59,7 +60,10 @@ public class CarCamera : MonoBehaviour
         transform.SetParent(null, true);
 
         if (target != null)
+        {
             yaw = target.eulerAngles.y;
+            smoothTarget = target.position;
+        }
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -100,17 +104,19 @@ public class CarCamera : MonoBehaviour
     {
         if (target == null || allAngles.Count == 0) return;
 
+        smoothTarget = Vector3.Lerp(smoothTarget, target.position, Time.deltaTime * 12f);
+
         object current = allAngles[currentAngle];
 
         if (current is Vector3 offset)
         {
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
-            Vector3 desiredPos = target.position + rotation * offset;
+            Vector3 desiredPos = smoothTarget + rotation * offset;
 
             transform.position = Vector3.SmoothDamp(
                 transform.position, desiredPos, ref smoothVelocity, positionSmoothTime);
 
-            Vector3 lookTarget = target.position + Vector3.up * lookHeight;
+            Vector3 lookTarget = smoothTarget + Vector3.up * lookHeight;
             transform.rotation = Quaternion.LookRotation(lookTarget - transform.position);
         }
         else if (current is Transform camPos)
