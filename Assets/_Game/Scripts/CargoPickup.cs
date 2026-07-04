@@ -38,6 +38,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private float currentHoldDist;
 
     private bool syncHolding;
+    private int syncHeldId = -1;
 
     private void Start()
     {
@@ -341,11 +342,19 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         float targetW = syncHolding ? 1f : 0f;
         ikWeight = Mathf.MoveTowards(ikWeight, targetW, Time.deltaTime * ikBlendSpeed);
 
-        if (syncHolding && !string.IsNullOrEmpty(syncHeldName))
+        if (syncHolding && (syncHeldId >= 0 || !string.IsNullOrEmpty(syncHeldName)))
         {
             if (heldRb == null)
             {
-                GameObject found = GameObject.Find(syncHeldName);
+                GameObject found = null;
+                if (syncHeldId >= 0)
+                {
+                    PhotonView pv = PhotonView.Find(syncHeldId);
+                    if (pv != null) found = pv.gameObject;
+                }
+                if (found == null && !string.IsNullOrEmpty(syncHeldName))
+                    found = GameObject.Find(syncHeldName);
+
                 if (found != null)
                 {
                     heldRb = found.GetComponent<Rigidbody>();
@@ -396,6 +405,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (stream.IsWriting)
         {
             stream.SendNext(isHolding);
+            stream.SendNext(heldPV != null ? heldPV.ViewID : -1);
             stream.SendNext(heldRb != null ? heldRb.gameObject.name : "");
 
             if (isHolding && heldRb != null)
@@ -406,6 +416,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         else
         {
             syncHolding = (bool)stream.ReceiveNext();
+            syncHeldId = (int)stream.ReceiveNext();
             syncHeldName = (string)stream.ReceiveNext();
             syncHeldTargetPos = (Vector3)stream.ReceiveNext();
         }
