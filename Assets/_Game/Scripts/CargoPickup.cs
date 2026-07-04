@@ -38,7 +38,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private float currentHoldDist;
 
     private bool syncHolding;
-    private int syncHeldId = -1;
 
     private void Start()
     {
@@ -222,15 +221,14 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             UpdateCarControlTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
 
+            heldRb.isKinematic = false;
+            heldRb.useGravity = true;
+            heldRb.linearDamping = 0f;
+            heldRb.angularDamping = 0.05f;
+
             CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
             if (sync != null)
                 sync.SetGrabbed(false);
-            else
-            {
-                heldRb.useGravity = true;
-                heldRb.linearDamping = 0f;
-                heldRb.angularDamping = 0.05f;
-            }
         }
         heldRb = null;
         heldPV = null;
@@ -336,26 +334,28 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private Vector3 syncHeldTargetPos;
     private Vector3 heldSmoothVel;
+    private string syncHeldName = "";
 
     private void RemoteSync()
     {
         float targetW = syncHolding ? 1f : 0f;
         ikWeight = Mathf.MoveTowards(ikWeight, targetW, Time.deltaTime * ikBlendSpeed);
 
-        if (syncHolding && syncHeldId >= 0)
+        if (syncHolding && !string.IsNullOrEmpty(syncHeldName))
         {
             if (heldRb == null)
             {
-                PhotonView pv = PhotonView.Find(syncHeldId);
-                if (pv != null)
+                GameObject found = GameObject.Find(syncHeldName);
+                if (found != null)
                 {
-                    heldRb = pv.GetComponent<Rigidbody>();
+                    heldRb = found.GetComponent<Rigidbody>();
                     isHolding = true;
 
                     if (heldRb != null)
                     {
                         heldRb.isKinematic = true;
                         heldRb.useGravity = false;
+                        heldRb.linearDamping = 0f;
                         heldByPickup.Add(heldRb.transform);
                         CarControl.droppedBoxes.Remove(heldRb.transform);
                     }
@@ -376,6 +376,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                 heldByPickup.Remove(heldRb.transform);
                 heldRb.isKinematic = false;
                 heldRb.useGravity = true;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0.05f;
             }
             heldRb = null;
             heldPV = null;
@@ -394,7 +396,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (stream.IsWriting)
         {
             stream.SendNext(isHolding);
-            stream.SendNext(heldPV != null ? heldPV.ViewID : -1);
+            stream.SendNext(heldRb != null ? heldRb.gameObject.name : "");
 
             if (isHolding && heldRb != null)
                 stream.SendNext(heldRb.position);
@@ -404,7 +406,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         else
         {
             syncHolding = (bool)stream.ReceiveNext();
-            syncHeldId = (int)stream.ReceiveNext();
+            syncHeldName = (string)stream.ReceiveNext();
             syncHeldTargetPos = (Vector3)stream.ReceiveNext();
         }
     }
