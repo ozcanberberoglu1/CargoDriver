@@ -83,6 +83,8 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
     private void FreezePickup()
     {
+        SetupCollisionLayers();
+
         GameObject pickup = GameObject.Find("Pickup");
         if (pickup == null) return;
 
@@ -93,6 +95,24 @@ public class LobbyController : MonoBehaviourPunCallbacks
         CarControl cc = pickup.GetComponent<CarControl>();
         if (cc != null)
             cc.enabled = false;
+
+        SetLayerRecursive(pickup, LayerMask.NameToLayer("Vehicle"));
+    }
+
+    public static void SetupCollisionLayers()
+    {
+        int playerLayer = LayerMask.NameToLayer("Player");
+        int vehicleLayer = LayerMask.NameToLayer("Vehicle");
+        if (playerLayer >= 0 && vehicleLayer >= 0)
+            Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, true);
+    }
+
+    public static void SetLayerRecursive(GameObject obj, int layer)
+    {
+        if (layer < 0) return;
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+            SetLayerRecursive(child.gameObject, layer);
     }
 
     private void Update()

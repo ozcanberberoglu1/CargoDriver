@@ -1,8 +1,11 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 public class GameSceneController : MonoBehaviourPunCallbacks
 {
@@ -13,7 +16,30 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     [Header("Cargo Box Prefab")]
     [SerializeField] private GameObject cargoBoxPrefab;
 
+    [Header("Death")]
+    [SerializeField] private Collider deadCollider;
+
+    [Header("Checkpoints")]
+    [SerializeField] private CheckpointData[] checkpoints;
+
     private GameObject spawnedPickup;
+    private int currentCheckpointIndex;
+    private List<CargoSnapshot> savedCargoSnapshots = new();
+    private bool isDead;
+
+    [Serializable]
+    public class CheckpointData
+    {
+        public string levelName;
+        public Collider checkpointTrigger;
+        public Transform spawnPoint;
+    }
+
+    private class CargoSnapshot
+    {
+        public Vector3 localPos;
+        public Quaternion localRot;
+    }
 
     private IEnumerator Start()
     {
@@ -35,6 +61,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         GameObject go = new GameObject("VehicleInteraction_Local");
         go.AddComponent<VehicleInteraction>();
+
+        SaveCargoSnapshot();
     }
 
     private IEnumerator WaitAndSpawnCargo()
@@ -65,13 +93,88 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         Keyboard kb = Keyboard.current;
         if (kb != null && kb.rKey.wasPressedThisFrame)
-            ResetCar();
+            RespawnAtCheckpoint();
+
+        CheckCheckpoints();
+        CheckDeath();
     }
 
-    private void ResetCar()
+    #region Checkpoints
+
+    private void CheckCheckpoints()
     {
-        Vector3 spawnPos = carSpawnArea != null ? carSpawnArea.position : Vector3.zero;
-        Quaternion spawnRot = carSpawnArea != null ? carSpawnArea.rotation : Quaternion.identity;
+        if (checkpoints == null || spawnedPickup == null) return;
+
+        for (int i = currentCheckpointIndex; i < checkpoints.Length; i++)
+        {
+            var cp = checkpoints[i];
+            if (cp.checkpointTrigger == null) continue;
+
+            Collider carCol = spawnedPickup.GetComponent<Collider>();
+            if (carCol == null) continue;
+
+            if (cp.checkpointTrigger.bounds.Intersects(carCol.bounds))
+            {
+                if (i > currentCheckpointIndex || (i == 0 && savedCargoSnapshots.Count == 0))
+                {
+                    currentCheckpointIndex = i;
+                    SaveCargoSnapshot();
+
+                    PhotonNetwork.CurrentRoom.SetCustomProperties(
+                        new Hashtable { { "checkpoint", currentCheckpointIndex } });
+                }
+            }
+        }
+    }
+
+    private void CheckDeath()
+    {
+        if (deadCollider == null || spawnedPickup == null || isDead) return;
+
+        Collider carCol = spawnedPickup.GetComponent<Collider>();
+        if (carCol == null) return;
+
+        if (deadCollider.bounds.Intersects(carCol.bounds))
+        {
+            isDead = true;
+            RespawnAtCheckpoint();
+        }
+    }
+
+    private void SaveCargoSnapshot()
+    {
+        savedCargoSnapshots.Clear();
+
+        if (spawnedPickup == null) return;
+
+        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
+        if (cargoParent == null) return;
+
+        foreach (Transform child in cargoParent)
+        {
+            if (!child.name.StartsWith("CargoBox")) continue;
+            savedCargoSnapshots.Add(new CargoSnapshot
+            {
+                localPos = child.localPosition,
+                localRot = child.localRotation
+            });
+        }
+    }
+
+    private void RespawnAtCheckpoint()
+    {
+        if (spawnedPickup == null) return;
+
+        Transform spawnPoint = null;
+
+        if (checkpoints != null && currentCheckpointIndex < checkpoints.Length)
+            spawnPoint = checkpoints[currentCheckpointIndex].spawnPoint;
+
+        if (spawnPoint == null)
+            spawnPoint = carSpawnArea;
+
+        Vector3 spawnPos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
+        Quaternion spawnRot = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
 
         Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
         if (rb != null)
@@ -84,11 +187,90 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         spawnedPickup.transform.position = spawnPos;
         spawnedPickup.transform.rotation = spawnRot;
 
-        StartCoroutine(EnableCarPhysics(spawnedPickup));
+        RestoreCargoSnapshot();
+        StartCoroutine(EnableCarAfterRespawn());
+    }
+
+    private void RestoreCargoSnapshot()
+    {
+        if (spawnedPickup == null) return;
+
+        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
+        if (cargoParent == null) return;
+
+        List<Transform> boxes = new();
+        foreach (Transform child in cargoParent)
+        {
+            if (child.name.StartsWith("CargoBox"))
+                boxes.Add(child);
+        }
+
+        for (int i = 0; i < boxes.Count && i < savedCargoSnapshots.Count; i++)
+        {
+            Rigidbody boxRb = boxes[i].GetComponent<Rigidbody>();
+            if (boxRb != null)
+            {
+                boxRb.isKinematic = true;
+                boxRb.linearVelocity = Vector3.zero;
+                boxRb.angularVelocity = Vector3.zero;
+            }
+
+            boxes[i].localPosition = savedCargoSnapshots[i].localPos;
+            boxes[i].localRotation = savedCargoSnapshots[i].localRot;
+        }
+    }
+
+    private IEnumerator EnableCarAfterRespawn()
+    {
+        yield return new WaitForSeconds(1f);
+
+        Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
+        if (rb != null)
+            rb.isKinematic = false;
+
+        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
+        if (cargoParent != null)
+        {
+            foreach (Transform child in cargoParent)
+            {
+                if (!child.name.StartsWith("CargoBox")) continue;
+                Rigidbody boxRb = child.GetComponent<Rigidbody>();
+                if (boxRb != null)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                }
+            }
+        }
+
+        isDead = false;
+    }
+
+    #endregion
+
+    #region Car Physics
+
+    public static void SetupCollisionLayers()
+    {
+        int playerLayer = LayerMask.NameToLayer("Player");
+        int vehicleLayer = LayerMask.NameToLayer("Vehicle");
+        if (playerLayer >= 0 && vehicleLayer >= 0)
+            Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, true);
+    }
+
+    public static void SetLayerRecursive(GameObject obj, int layer)
+    {
+        if (layer < 0) return;
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+            SetLayerRecursive(child.gameObject, layer);
     }
 
     private IEnumerator EnableCarPhysics(GameObject pickup)
     {
+        SetupCollisionLayers();
+        SetLayerRecursive(pickup, LayerMask.NameToLayer("Vehicle"));
+
         yield return new WaitForSeconds(1f);
 
         Rigidbody rb = pickup.GetComponent<Rigidbody>();
@@ -108,6 +290,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
     }
 
+    #endregion
+
+    #region Pickup Spawn
+
     private GameObject SpawnPickupWithCargo()
     {
         Vector3 spawnPos = carSpawnArea != null ? carSpawnArea.position : Vector3.zero;
@@ -122,12 +308,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         string data = props["cargoData"].ToString();
         string[] parts = data.Split(';');
 
-        // First part: pickupPos|pickupRot|pickupScale
         string[] header = parts[0].Split('|');
         string[] posStr = header[0].Split(',');
         string[] rotStr = header[1].Split(',');
 
-        Vector3 pickupOrigPos = ParseVec3(posStr[0], posStr[1], posStr[2]);
         Quaternion pickupOrigRot = ParseQuat(rotStr[0], rotStr[1], rotStr[2], rotStr[3]);
 
         GameObject pickup = PhotonNetwork.InstantiateRoomObject(
@@ -172,7 +356,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
             Vector3 localPos = ParseVec3(c[0], c[1], c[2]);
             Quaternion localRot = ParseQuat(c[3], c[4], c[5], c[6]);
-            Vector3 scale = ParseVec3(c[7], c[8], c[9]);
 
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
@@ -215,6 +398,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
     }
 
+    #endregion
+
+    #region Parsing
+
     private Vector3 ParseVec3(string x, string y, string z)
     {
         return new Vector3(
@@ -231,4 +418,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             float.Parse(z, CultureInfo.InvariantCulture),
             float.Parse(w, CultureInfo.InvariantCulture));
     }
+
+    #endregion
 }
