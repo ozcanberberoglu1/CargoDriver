@@ -52,8 +52,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             rotFrom = rotTo = rb.rotation;
         }
 
-        PhotonNetwork.SendRate = 30;
-        PhotonNetwork.SerializationRate = 30;
+        PhotonNetwork.SendRate = 60;
+        PhotonNetwork.SerializationRate = 60;
 
         if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
         {
@@ -139,15 +139,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         interpTime += Time.deltaTime;
         float t = interpDuration > 0f ? Mathf.Clamp01(interpTime / interpDuration) : 1f;
 
-        if (t < 1f)
-        {
-            transform.position = Vector3.Lerp(posFrom, posTo, t);
-        }
-        else
-        {
-            transform.position = posTo + velocity * (interpTime - interpDuration);
-        }
-        transform.rotation = Quaternion.Slerp(rotFrom, rotTo, Mathf.Min(t, 1f));
+        transform.position = Vector3.Lerp(posFrom, posTo, t);
+        transform.rotation = Quaternion.Slerp(rotFrom, rotTo, t);
 
         if (steeringWheel != null)
             steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
