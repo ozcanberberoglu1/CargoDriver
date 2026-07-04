@@ -73,6 +73,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (pickup == null) yield break;
 
         spawnedPickup = pickup;
+
+        SetupCollisionLayers();
+        SetLayerRecursive(pickup, LayerMask.NameToLayer("Vehicle"));
+
         SpawnCargoOnPickup(pickup);
     }
 

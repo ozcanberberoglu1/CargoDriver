@@ -59,7 +59,10 @@ public class VehicleInteraction : MonoBehaviour
             cc.enabled = false;
 
         foreach (Collider col in spawnedPlayer.GetComponentsInChildren<Collider>())
-            col.isTrigger = true;
+        {
+            if (col is CharacterController) continue;
+            col.enabled = false;
+        }
 
         ToyController tc = spawnedPlayer.GetComponent<ToyController>();
         if (tc != null)
@@ -79,13 +82,20 @@ public class VehicleInteraction : MonoBehaviour
     {
         if (spawnedPlayer == null || pickup == null) return;
 
-        CarCamera carCam = pickup.GetComponentInChildren<CarCamera>(true);
-        if (carCam != null)
-            carCam.gameObject.SetActive(false);
+        DisableCarCamera();
 
         Transform spawnPoint = pickup.transform.Find("PlayerCarSpawn");
         behindAnchor = spawnPoint != null ? spawnPoint : pickup.transform;
         spawnedPlayer.transform.position = behindAnchor.position;
+    }
+
+    private void DisableCarCamera()
+    {
+        foreach (CarCamera cc in FindObjectsByType<CarCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            cc.enabled = false;
+            cc.gameObject.SetActive(false);
+        }
     }
 
     private void LateUpdate()
