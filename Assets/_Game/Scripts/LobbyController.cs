@@ -132,9 +132,11 @@ public class LobbyController : MonoBehaviourPunCallbacks
             CheckJoinTrigger();
     }
 
+    private bool joinPanelShown;
+
     private void CheckJoinTrigger()
     {
-        if (joinCylinderTrigger == null) return;
+        if (joinCylinderTrigger == null || joinPanelShown) return;
 
         ToyController local = FindLocalPlayer();
         if (local == null) return;
@@ -144,6 +146,7 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
         if (joinCylinderTrigger.bounds.Intersects(cc.bounds))
         {
+            joinPanelShown = true;
             JoinGameController jgc = FindAnyObjectByType<JoinGameController>();
             if (jgc != null)
                 jgc.ShowPanel();

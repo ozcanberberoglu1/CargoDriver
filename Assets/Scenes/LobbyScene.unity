@@ -5309,28 +5309,6 @@ MonoBehaviour:
   playerListPrefab: {fileID: 4243841604330553924, guid: 40cd7612279db4a1e89871566abaaf15, type: 3}
   cargoBoxes:
   - {fileID: 4250088495162581819}
-  - {fileID: 528813775}
-  - {fileID: 2009913680}
-  - {fileID: 728016564}
-  - {fileID: 1968062646}
-  - {fileID: 787861647}
-  - {fileID: 170529759}
-  - {fileID: 1020001308}
-  - {fileID: 1568685702}
-  - {fileID: 1892994842}
-  - {fileID: 49570661}
-  - {fileID: 1927845861}
-  - {fileID: 1685109593}
-  - {fileID: 316255819}
-  - {fileID: 639295195}
-  - {fileID: 1618923036}
-  - {fileID: 685490305}
-  - {fileID: 1198901701}
-  - {fileID: 2095645648}
-  - {fileID: 1783992054}
-  - {fileID: 534443760}
-  - {fileID: 1546722022}
-  - {fileID: 1987840726}
   truckTrigger: {fileID: 1816945159}
   successCargoText: {fileID: 1620128869}
   successDisplayTime: 4
@@ -7462,6 +7440,7 @@ MonoBehaviour:
   behindVehicleButton: {fileID: 1381033108}
   readyButton: {fileID: 714745807}
   goButton: {fileID: 1568584603}
+  countdownText: {fileID: 534207252}
 --- !u!4 &1442728464
 Transform:
   m_ObjectHideFlags: 0

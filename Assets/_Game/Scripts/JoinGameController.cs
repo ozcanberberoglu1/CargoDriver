@@ -4,6 +4,7 @@ using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
@@ -30,6 +31,9 @@ public class JoinGameController : MonoBehaviourPunCallbacks
     [Header("Action Buttons")]
     [SerializeField] private Button readyButton;
     [SerializeField] private Button goButton;
+
+    [Header("Countdown")]
+    [SerializeField] private TextMeshProUGUI countdownText;
 
     private static readonly string[] ControlKeys = { "ctrl_W", "ctrl_A", "ctrl_S", "ctrl_D", "ctrl_Space" };
     private const string BehindKey = "ctrl_Behind";
@@ -86,10 +90,38 @@ public class JoinGameController : MonoBehaviourPunCallbacks
             PhotonNetwork.CurrentRoom.SetCustomProperties(init);
     }
 
+    private void Update()
+    {
+        Keyboard kb = Keyboard.current;
+        if (kb == null) return;
+
+        if (kb.escapeKey.wasPressedThisFrame && IsPanelOpen())
+            ClosePanel();
+    }
+
+    private bool IsPanelOpen()
+    {
+        if (joinGamePanel != null)
+            return joinGamePanel.activeSelf;
+
+        GameObject found = GameObject.Find("JoinGamePanel");
+        return found != null && found.activeSelf;
+    }
+
     public void ShowPanel()
     {
         if (panelActive) return;
         panelActive = true;
+
+        if (joinGamePanel == null)
+        {
+            Canvas[] allCanvas = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (Canvas c in allCanvas)
+            {
+                Transform t = c.transform.Find("JoinGamePanel");
+                if (t != null) { joinGamePanel = t.gameObject; break; }
+            }
+        }
 
         if (joinGamePanel != null)
             joinGamePanel.SetActive(true);
@@ -298,13 +330,72 @@ public class JoinGameController : MonoBehaviourPunCallbacks
 
         SaveCargoPositions();
 
-        StartCoroutine(LoadGameAfterSave());
+        PhotonNetwork.CurrentRoom.SetCustomProperties(
+            new Hashtable { { "countdown", 5 } });
+
+        ClosePanel();
     }
 
-    private IEnumerator LoadGameAfterSave()
+    public void ClosePanel()
     {
-        yield return new WaitForSeconds(0.5f);
-        PhotonNetwork.LoadLevel("GameScene");
+        panelActive = false;
+
+        if (joinGamePanel != null)
+        {
+            joinGamePanel.SetActive(false);
+        }
+        else
+        {
+            GameObject found = GameObject.Find("JoinGamePanel");
+            if (found != null) found.SetActive(false);
+        }
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        ToyController local = FindAnyObjectByType<ToyController>();
+        if (local != null && local.photonView.IsMine)
+            local.SetPaused(false);
+    }
+
+    private void UpdateCountdown(Hashtable changedProps)
+    {
+        if (!changedProps.ContainsKey("countdown")) return;
+
+        int value = (int)changedProps["countdown"];
+        if (value <= 0) return;
+
+        ClosePanel();
+
+        if (countdownText != null)
+        {
+            countdownText.gameObject.SetActive(true);
+            countdownText.text = value.ToString();
+        }
+
+        if (PhotonNetwork.IsMasterClient)
+            StartCoroutine(CountdownTick(value));
+    }
+
+    private IEnumerator CountdownTick(int current)
+    {
+        yield return new WaitForSeconds(1f);
+
+        int next = current - 1;
+
+        if (next > 0)
+        {
+            PhotonNetwork.CurrentRoom.SetCustomProperties(
+                new Hashtable { { "countdown", next } });
+        }
+        else
+        {
+            PhotonNetwork.CurrentRoom.SetCustomProperties(
+                new Hashtable { { "countdown", 0 } });
+
+            yield return new WaitForSeconds(0.3f);
+            PhotonNetwork.LoadLevel("GameScene");
+        }
     }
 
     private void SaveCargoPositions()
@@ -395,6 +486,8 @@ public class JoinGameController : MonoBehaviourPunCallbacks
 
     public override void OnRoomPropertiesUpdate(Hashtable changedProps)
     {
+        UpdateCountdown(changedProps);
+
         if (!panelActive) return;
 
         bool controlChanged = false;
