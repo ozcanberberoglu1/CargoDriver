@@ -262,12 +262,15 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, true);
     }
 
-    public static void SetLayerRecursive(GameObject obj, int layer)
+    public static void SetLayerRecursive(GameObject obj, int layer, bool skipCargoBoxes = true)
     {
         if (layer < 0) return;
+        if (skipCargoBoxes && obj.name.StartsWith("CargoBox")) return;
+        if (skipCargoBoxes && obj.CompareTag("CargoBox")) return;
+
         obj.layer = layer;
         foreach (Transform child in obj.transform)
-            SetLayerRecursive(child.gameObject, layer);
+            SetLayerRecursive(child.gameObject, layer, skipCargoBoxes);
     }
 
     private IEnumerator EnableCarPhysics(GameObject pickup)

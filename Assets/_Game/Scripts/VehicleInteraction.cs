@@ -94,6 +94,18 @@ public class VehicleInteraction : MonoBehaviour
         spawnedPlayer.transform.SetParent(parent, false);
         spawnedPlayer.transform.localPosition = Vector3.zero;
         spawnedPlayer.transform.localRotation = Quaternion.identity;
+
+        ToyController tc = spawnedPlayer.GetComponent<ToyController>();
+        if (tc != null)
+        {
+            int playerLayer = LayerMask.NameToLayer("Player");
+            if (playerLayer >= 0)
+            {
+                spawnedPlayer.layer = playerLayer;
+                foreach (Transform child in spawnedPlayer.GetComponentsInChildren<Transform>(true))
+                    child.gameObject.layer = playerLayer;
+            }
+        }
     }
 
     private void DisableCarCamera()

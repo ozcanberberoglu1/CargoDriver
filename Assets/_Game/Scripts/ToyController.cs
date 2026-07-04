@@ -323,6 +323,8 @@ public class ToyController : MonoBehaviourPun
         transform.SetParent(parent, false);
         transform.localPosition = Vector3.zero;
         transform.localRotation = Quaternion.identity;
+
+        SetPlayerLayer();
     }
 
     private void SetPlayerLayer()

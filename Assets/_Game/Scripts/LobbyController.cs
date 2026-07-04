@@ -110,6 +110,8 @@ public class LobbyController : MonoBehaviourPunCallbacks
     public static void SetLayerRecursive(GameObject obj, int layer)
     {
         if (layer < 0) return;
+        if (obj.name.StartsWith("CargoBox") || obj.CompareTag("CargoBox")) return;
+
         obj.layer = layer;
         foreach (Transform child in obj.transform)
             SetLayerRecursive(child.gameObject, layer);
