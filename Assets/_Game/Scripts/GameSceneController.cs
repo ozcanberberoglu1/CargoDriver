@@ -77,6 +77,14 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         SetupCollisionLayers();
         SetLayerRecursive(pickup, LayerMask.NameToLayer("Vehicle"));
 
+        Transform cargoBoxes = pickup.transform.Find("CargoBoxes");
+        if (cargoBoxes != null)
+        {
+            BoxCollider bc = cargoBoxes.GetComponent<BoxCollider>();
+            if (bc != null)
+                Destroy(bc);
+        }
+
         SpawnCargoOnPickup(pickup);
     }
 
