@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class MovingObstacle : MonoBehaviour
 {
     [Header("Movement")]
@@ -23,20 +24,32 @@ public class MovingObstacle : MonoBehaviour
 
     private Vector3 startPos;
     private Vector3 endPos;
+    private Rigidbody rb;
+    private Vector3 desiredPos;
+
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+    }
 
     private void Start()
     {
         startPos = transform.position;
         endPos = startPos + targetOffset;
+        desiredPos = startPos;
 
         if (startAutomatically)
             StartCoroutine(MovementRoutine());
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
+        rb.MovePosition(desiredPos);
+
         if (rotationSpeed != Vector3.zero)
-            transform.Rotate(rotationSpeed * Time.deltaTime);
+            rb.MoveRotation(rb.rotation * Quaternion.Euler(rotationSpeed * Time.fixedDeltaTime));
     }
 
     private IEnumerator MovementRoutine()
@@ -71,11 +84,11 @@ public class MovingObstacle : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             float t = moveCurve.Evaluate(elapsed / duration);
-            transform.position = Vector3.Lerp(from, to, t);
+            desiredPos = Vector3.Lerp(from, to, t);
             yield return null;
         }
 
-        transform.position = to;
+        desiredPos = to;
     }
 
     private void OnDrawGizmosSelected()
