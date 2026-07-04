@@ -915,8 +915,9 @@ GameObject:
   - component: {fileID: 179308861}
   - component: {fileID: 179308860}
   - component: {fileID: 179308859}
+  - component: {fileID: 179308862}
   m_Layer: 0
-  m_Name: Cube (56)
+  m_Name: moving
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -931,7 +932,7 @@ Transform:
   m_GameObject: {fileID: 179308857}
   serializedVersion: 2
   m_LocalRotation: {x: 0.004498627, y: 0.05865897, z: -0.07633422, w: 0.99534523}
-  m_LocalPosition: {x: -43.82, y: 7.87, z: 50.48999}
+  m_LocalPosition: {x: -48.16999, y: 8.87, z: 44.95999}
   m_LocalScale: {x: 6.36, y: 4.2241874, z: 0.49886847}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1015,6 +1016,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 179308857}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &179308862
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 179308857}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: -6.46, y: 1.33, z: 0.8}
+  speed: 2
+  waitAtStart: 1
+  waitAtEnd: 1
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &184084788
 GameObject:
   m_ObjectHideFlags: 0
@@ -1886,6 +1932,7 @@ GameObject:
   - component: {fileID: 267890941}
   - component: {fileID: 267890940}
   - component: {fileID: 267890939}
+  - component: {fileID: 267890942}
   m_Layer: 0
   m_Name: Cube (38)
   m_TagString: Untagged
@@ -1902,8 +1949,8 @@ Transform:
   m_GameObject: {fileID: 267890937}
   serializedVersion: 2
   m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -8.8508, y: 5.0823, z: 69.46982}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 5.9366713}
+  m_LocalPosition: {x: -8.8824005, y: 5.1306, z: 70.67731}
+  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.365679}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -1986,6 +2033,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 267890937}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &267890942
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 267890937}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: 6.6, y: 0, z: 0}
+  speed: 2
+  waitAtStart: 1
+  waitAtEnd: 1
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &273640136
 GameObject:
   m_ObjectHideFlags: 0
@@ -3391,8 +3483,8 @@ Transform:
   m_GameObject: {fileID: 521823820}
   serializedVersion: 2
   m_LocalRotation: {x: -0.026131345, y: -0.36236712, z: 0.019814745, w: 0.93145835}
-  m_LocalPosition: {x: -14.044998, y: 16.2218, z: 110.24579}
-  m_LocalScale: {x: 6.3599997, y: 1.6003134, z: 6.9277754}
+  m_LocalPosition: {x: -13.02, y: 16.2466, z: 110.3892}
+  m_LocalScale: {x: 6.3599997, y: 1.6003134, z: 8.288391}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -3935,8 +4027,9 @@ GameObject:
   - component: {fileID: 645269794}
   - component: {fileID: 645269793}
   - component: {fileID: 645269792}
+  - component: {fileID: 645269795}
   m_Layer: 0
-  m_Name: Cube (58)
+  m_Name: moving
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3951,7 +4044,7 @@ Transform:
   m_GameObject: {fileID: 645269790}
   serializedVersion: 2
   m_LocalRotation: {x: 0.004498627, y: 0.05865897, z: -0.07633422, w: 0.99534523}
-  m_LocalPosition: {x: -42.41999, y: 7.65, z: 62.45999}
+  m_LocalPosition: {x: -46.189995, y: 8.55, z: 63.950012}
   m_LocalScale: {x: 6.36, y: 4.2241874, z: 0.49886847}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4035,6 +4128,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 645269790}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &645269795
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 645269790}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: -6.46, y: 1.33, z: 0.8}
+  speed: 2
+  waitAtStart: 1
+  waitAtEnd: 1
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &683169212
 GameObject:
   m_ObjectHideFlags: 0
@@ -4432,13 +4570,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 703325297}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.02933271, y: -0.18468404, z: 0.014665047, w: 0.9822507}
-  m_LocalPosition: {x: -10.459999, y: 15.91, z: 104.28}
-  m_LocalScale: {x: 6.3599997, y: 1.6003134, z: 8.5697365}
+  m_LocalRotation: {x: -0.03035978, y: -0.10971026, z: 0.012399807, w: 0.99342245}
+  m_LocalPosition: {x: -9.8, y: 15.92, z: 104.25}
+  m_LocalScale: {x: 6.3599997, y: 1.6003134, z: 9.505551}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
-  m_LocalEulerAnglesHint: {x: -2.993, y: -21.356, z: 2.275}
+  m_LocalEulerAnglesHint: {x: -3.302, y: -12.656, z: 1.797}
 --- !u!65 &703325299
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -4529,6 +4667,7 @@ GameObject:
   - component: {fileID: 779294348}
   - component: {fileID: 779294347}
   - component: {fileID: 779294346}
+  - component: {fileID: 779294349}
   m_Layer: 0
   m_Name: Cube (41)
   m_TagString: Untagged
@@ -4545,8 +4684,8 @@ Transform:
   m_GameObject: {fileID: 779294344}
   serializedVersion: 2
   m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -8.8660965, y: 5.8378, z: 81.38849}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 5.9366713}
+  m_LocalPosition: {x: -8.836998, y: 6.2047, z: 87.482605}
+  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.365679}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -4629,6 +4768,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 779294344}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &779294349
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 779294344}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: 6.6, y: 0, z: 0}
+  speed: 2
+  waitAtStart: 1
+  waitAtEnd: 1
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &813868638
 GameObject:
   m_ObjectHideFlags: 0
@@ -5039,6 +5223,7 @@ GameObject:
   - component: {fileID: 891978599}
   - component: {fileID: 891978598}
   - component: {fileID: 891978597}
+  - component: {fileID: 891978600}
   m_Layer: 0
   m_Name: Cube (40)
   m_TagString: Untagged
@@ -5055,8 +5240,8 @@ Transform:
   m_GameObject: {fileID: 891978595}
   serializedVersion: 2
   m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -8.854599, y: 5.4626, z: 75.41879}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 5.9366713}
+  m_LocalPosition: {x: -8.844101, y: 5.6707, z: 79.08359}
+  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.365679}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -5139,6 +5324,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 891978595}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &891978600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 891978595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: -6.6, y: 0, z: 0}
+  speed: 2
+  waitAtStart: 1
+  waitAtEnd: 1
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &897466788
 GameObject:
   m_ObjectHideFlags: 0
@@ -5327,7 +5557,6 @@ Transform:
   - {fileID: 1076091370}
   - {fileID: 907901752}
   - {fileID: 2054773299}
-  - {fileID: 1211849653}
   - {fileID: 703325298}
   - {fileID: 521823821}
   - {fileID: 1497855431}
@@ -6300,6 +6529,7 @@ GameObject:
   - component: {fileID: 1076091373}
   - component: {fileID: 1076091372}
   - component: {fileID: 1076091371}
+  - component: {fileID: 1076091374}
   m_Layer: 0
   m_Name: Cube (39)
   m_TagString: Untagged
@@ -6315,13 +6545,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1076091369}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -8.879997, y: 5.73, z: 44.45999}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 2.0140226}
+  m_LocalRotation: {x: -0.020471796, y: -0.00018437275, z: 0.009003855, w: 0.9997499}
+  m_LocalPosition: {x: -8.840004, y: 3.66, z: 39.5}
+  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.782136}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
-  m_LocalEulerAnglesHint: {x: -3.614, y: -0.065, z: 1.034}
+  m_LocalEulerAnglesHint: {x: -2.346, y: -0.042, z: 1.033}
 --- !u!65 &1076091371
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -6400,6 +6630,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1076091369}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1076091374
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1076091369}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: 0, y: 0, z: 7}
+  speed: 2
+  waitAtStart: 2
+  waitAtEnd: 2
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &1132529818
 GameObject:
   m_ObjectHideFlags: 0
@@ -6815,118 +7090,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1190451593}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1 &1211849652
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1211849653}
-  - component: {fileID: 1211849656}
-  - component: {fileID: 1211849655}
-  - component: {fileID: 1211849654}
-  m_Layer: 0
-  m_Name: Cube (43)
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1211849653
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1211849652}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -9.040001, y: 15.459999, z: 96.73999}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.569737}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 897857930}
-  m_LocalEulerAnglesHint: {x: -3.614, y: -0.065, z: 1.034}
---- !u!65 &1211849654
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1211849652}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
---- !u!23 &1211849655
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1211849652}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &1211849656
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1211849652}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &1230122756
 GameObject:
   m_ObjectHideFlags: 0
@@ -7210,8 +7373,8 @@ Transform:
   m_GameObject: {fileID: 1381489826}
   serializedVersion: 2
   m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -8.830002, y: 4.1, z: 54.03}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.569737}
+  m_LocalPosition: {x: -8.8307, y: 4.1401, z: 54.6647}
+  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 7.2979884}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -7999,7 +8162,7 @@ Transform:
   m_GameObject: {fileID: 1497855430}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.22747567, z: -0, w: 0.9737838}
-  m_LocalPosition: {x: -17.409996, y: 16.47, z: 115.06}
+  m_LocalPosition: {x: -17.18, y: 16.47, z: 115.9}
   m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 6.9277754}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -8223,8 +8386,8 @@ Transform:
   m_GameObject: {fileID: 1557541642}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.064871006, z: -0, w: 0.9978937}
-  m_LocalPosition: {x: -18.950005, y: 16.47, z: 120.57001}
-  m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 6.927776}
+  m_LocalPosition: {x: -18.8897, y: 16.47, z: 120.5779}
+  m_LocalScale: {x: 6.2385244, y: 1.6003134, z: 6.927776}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -8783,8 +8946,8 @@ Transform:
   m_GameObject: {fileID: 1649390608}
   serializedVersion: 2
   m_LocalRotation: {x: -0.23425722, y: -0.002109746, z: 0.0087551335, w: 0.9721329}
-  m_LocalPosition: {x: -8.809998, y: 2.97, z: 34.619995}
-  m_LocalScale: {x: 6.3600006, y: 1.6003133, z: 8.569738}
+  m_LocalPosition: {x: -8.7969, y: 2.2406, z: 33.1941}
+  m_LocalScale: {x: 6.3600006, y: 1.6003133, z: 5.36637}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 897857930}
@@ -9190,8 +9353,9 @@ GameObject:
   - component: {fileID: 1805905732}
   - component: {fileID: 1805905731}
   - component: {fileID: 1805905730}
+  - component: {fileID: 1805905733}
   m_Layer: 0
-  m_Name: Cube (57)
+  m_Name: moving
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -9206,7 +9370,7 @@ Transform:
   m_GameObject: {fileID: 1805905728}
   serializedVersion: 2
   m_LocalRotation: {x: 0.004498627, y: 0.05865897, z: -0.07633422, w: 0.99534523}
-  m_LocalPosition: {x: -50.010002, y: 8.82, z: 57.22}
+  m_LocalPosition: {x: -53.38999, y: 9.32, z: 55.72}
   m_LocalScale: {x: 6.36, y: 4.2241874, z: 0.49886847}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -9290,6 +9454,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1805905728}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1805905733
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1805905728}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: 6.16, y: -1.27, z: -0.85}
+  speed: 2
+  waitAtStart: 1
+  waitAtEnd: 1
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &1813034171
 GameObject:
   m_ObjectHideFlags: 0
@@ -10412,6 +10621,7 @@ GameObject:
   - component: {fileID: 2054773302}
   - component: {fileID: 2054773301}
   - component: {fileID: 2054773300}
+  - component: {fileID: 2054773303}
   m_Layer: 0
   m_Name: Cube (42)
   m_TagString: Untagged
@@ -10428,7 +10638,7 @@ Transform:
   m_GameObject: {fileID: 2054773298}
   serializedVersion: 2
   m_LocalRotation: {x: -0.03153488, y: -0.00028400825, z: 0.009001264, w: 0.9994621}
-  m_LocalPosition: {x: -8.870003, y: 6.3, z: 88.69}
+  m_LocalPosition: {x: -8.879997, y: 6.72, z: 95.94}
   m_LocalScale: {x: 6.3600006, y: 1.6003134, z: 8.569737}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -10512,6 +10722,51 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2054773298}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &2054773303
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2054773298}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbc7e36a2cb294b9ba65f648991221e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingObstacle
+  targetOffset: {x: 0, y: 8.6, z: 0}
+  speed: 3
+  waitAtStart: 6
+  waitAtEnd: 2
+  loop: 1
+  pingPong: 1
+  startAutomatically: 1
+  moveCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rotationSpeed: {x: 0, y: 0, z: 0}
+  previewInEditor: 0
 --- !u!1 &2064177742
 GameObject:
   m_ObjectHideFlags: 0
