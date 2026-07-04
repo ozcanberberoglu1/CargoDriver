@@ -379,6 +379,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
             box.transform.localScale = scale;
             box.name = $"CargoBox_{i}";
+            box.tag = "CargoBox";
 
             if (cargoParent != null)
                 box.transform.SetParent(cargoParent, true);

@@ -266,8 +266,15 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                 + Vector3.up * holdUp;
         }
 
-        Vector3 diff = holdPos - heldRb.position;
-        heldRb.linearVelocity = diff * 12f;
+        if (heldRb.isKinematic)
+        {
+            heldRb.transform.position = holdPos;
+        }
+        else
+        {
+            Vector3 diff = holdPos - heldRb.position;
+            heldRb.linearVelocity = diff * 12f;
+        }
     }
 
     #endregion
