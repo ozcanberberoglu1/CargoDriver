@@ -202,6 +202,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         }
 
         heldByPickup.Add(heldRb.transform);
+        CarControl.droppedBoxes.Remove(heldRb.transform);
 
         CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
         if (sync != null)
@@ -238,29 +239,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private void UpdateCarControlTarget(Transform box)
     {
-        CarControl cc = FindAnyObjectByType<CarControl>();
-        if (cc == null) return;
-
-        var field = typeof(CarControl).GetField("cargoTargetPos",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var fieldT = typeof(CarControl).GetField("cargoBoxTransforms",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        if (field == null || fieldT == null) return;
-
-        var targets = (Vector3[])field.GetValue(cc);
-        var transforms = (Transform[])fieldT.GetValue(cc);
-
-        if (targets == null || transforms == null) return;
-
-        for (int i = 0; i < transforms.Length; i++)
-        {
-            if (transforms[i] == box)
-            {
-                targets[i] = box.position;
-                break;
-            }
-        }
+        CarControl.droppedBoxes.Add(box);
     }
 
     private void CarryObject()
@@ -378,6 +357,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                         heldRb.isKinematic = true;
                         heldRb.useGravity = false;
                         heldByPickup.Add(heldRb.transform);
+                        CarControl.droppedBoxes.Remove(heldRb.transform);
                     }
                 }
             }
