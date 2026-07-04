@@ -28,6 +28,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     private Vector3 syncPos;
     private Quaternion syncRot;
     private Vector3 syncVel;
+    private float syncAngVelY;
+    private float inputSendTimer;
 
     private const byte INPUT_EVENT = 42;
     private readonly Dictionary<int, float[]> remoteInputs = new();
@@ -111,22 +113,33 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         }
         else
         {
-            transform.position = Vector3.Lerp(transform.position, syncPos, Time.fixedDeltaTime * 15f);
-            transform.rotation = Quaternion.Slerp(transform.rotation, syncRot, Time.fixedDeltaTime * 15f);
+            // Prediction: move toward sync position using velocity
+            Vector3 predicted = syncPos + syncVel * Time.fixedDeltaTime;
+            float dist = Vector3.Distance(transform.position, predicted);
+
+            if (dist > 5f)
+            {
+                transform.position = syncPos;
+                transform.rotation = syncRot;
+            }
+            else
+            {
+                transform.position = Vector3.MoveTowards(transform.position, predicted, 
+                    Mathf.Max(dist * 20f, syncVel.magnitude * 1.5f) * Time.fixedDeltaTime);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, syncRot, 
+                    360f * Time.fixedDeltaTime);
+            }
 
             if (steeringWheel != null)
                 steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
 
             for (int i = 0; i < wheelMeshes.Length && i < wheels.Length; i++)
             {
-                WheelCollider wc = wheels[i].GetComponent<WheelCollider>();
-                Vector3 pos = wheelMeshes[i].position;
-                Quaternion rot = wheelMeshes[i].rotation;
-
+                Quaternion rot;
                 if (i < 2)
-                {
                     rot = transform.rotation * Quaternion.Euler(0f, currentTurnAngle, 0f);
-                }
+                else
+                    rot = transform.rotation;
 
                 wheelMeshes[i].position = wheels[i].position;
                 wheelMeshes[i].rotation = rot;
@@ -139,6 +152,10 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     private void SendMyInput()
     {
         if (PhotonNetwork.IsMasterClient) return;
+
+        inputSendTimer += Time.fixedDeltaTime;
+        if (inputSendTimer < 0.05f) return;
+        inputSendTimer = 0f;
 
         Keyboard kb = Keyboard.current;
         if (kb == null) return;
@@ -299,8 +316,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             {
                 if (cargoBoxTransforms[i] != null)
                 {
-                    stream.SendNext(cargoBoxTransforms[i].localPosition);
-                    stream.SendNext(cargoBoxTransforms[i].localRotation);
+                    stream.SendNext(cargoBoxTransforms[i].position);
+                    stream.SendNext(cargoBoxTransforms[i].rotation);
                 }
                 else
                 {
@@ -339,8 +356,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         for (int i = 0; i < count; i++)
         {
             if (cargoBoxTransforms[i] == null) continue;
-            cargoBoxTransforms[i].localPosition = syncCargoPos[i];
-            cargoBoxTransforms[i].localRotation = syncCargoRot[i];
+            cargoBoxTransforms[i].position = syncCargoPos[i];
+            cargoBoxTransforms[i].rotation = syncCargoRot[i];
         }
     }
 
