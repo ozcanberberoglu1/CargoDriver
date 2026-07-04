@@ -266,11 +266,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         {
             if (!child.name.StartsWith("CargoBox")) continue;
             Rigidbody boxRb = child.GetComponent<Rigidbody>();
-                if (boxRb != null)
-                {
-                    boxRb.isKinematic = false;
-                    boxRb.useGravity = true;
-                }
+            if (boxRb != null)
+            {
+                boxRb.isKinematic = false;
+                boxRb.useGravity = true;
             }
         }
 
