@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 
 public class CargoPickup : MonoBehaviourPun, IPunObservable
 {
+    public static readonly System.Collections.Generic.HashSet<Transform> heldByPickup = new();
     [Header("Grab")]
     [SerializeField] public float detectRange = 2.5f;
     [SerializeField] public float grabDistance = 0.5f;
@@ -200,15 +201,13 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             Debug.LogError($"[CargoPickup] NO PhotonView on {rb.gameObject.name}!");
         }
 
+        heldByPickup.Add(heldRb.transform);
+
         CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
         if (sync != null)
-        {
             sync.SetGrabbed(true);
-            Debug.Log($"[CargoPickup] CargoBoxSync.SetGrabbed(true) called");
-        }
         else
         {
-            Debug.LogWarning($"[CargoPickup] NO CargoBoxSync on {rb.gameObject.name}! Using fallback.");
             heldRb.useGravity = false;
             heldRb.linearDamping = 12f;
             heldRb.angularDamping = 8f;
@@ -217,10 +216,10 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private void StopGrab()
     {
-        Debug.Log($"[CargoPickup] STOP GRAB: obj={heldRb?.gameObject.name} ViewID={heldPV?.ViewID}");
-
         if (heldRb != null)
         {
+            heldByPickup.Remove(heldRb.transform);
+
             CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
             if (sync != null)
                 sync.SetGrabbed(false);
@@ -342,20 +341,21 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                     {
                         heldRb.isKinematic = true;
                         heldRb.useGravity = false;
+                        heldByPickup.Add(heldRb.transform);
                     }
                 }
             }
 
             if (heldRb != null)
             {
-                heldRb.transform.position = Vector3.Lerp(
-                    heldRb.transform.position, syncHeldPos, Time.deltaTime * 15f);
+                heldRb.transform.position = syncHeldPos;
             }
         }
         else if (!syncHolding && isHolding)
         {
             if (heldRb != null)
             {
+                heldByPickup.Remove(heldRb.transform);
                 heldRb.isKinematic = false;
                 heldRb.useGravity = true;
             }

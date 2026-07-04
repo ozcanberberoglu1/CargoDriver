@@ -96,7 +96,7 @@ public class CarCamera : MonoBehaviour
         }
     }
 
-    private void FixedUpdate()
+    private void LateUpdate()
     {
         if (target == null || allAngles.Count == 0) return;
 
