@@ -67,9 +67,14 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     private IEnumerator WaitAndSpawnCargo()
     {
-        yield return new WaitForSeconds(2f);
-
-        GameObject pickup = FindPickupInScene();
+        GameObject pickup = null;
+        float waited = 0f;
+        while (pickup == null && waited < 10f)
+        {
+            yield return new WaitForSeconds(0.3f);
+            waited += 0.3f;
+            pickup = FindPickupInScene();
+        }
         if (pickup == null) yield break;
 
         spawnedPickup = pickup;
@@ -207,18 +212,32 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     {
         if (spawnedPickup == null) return;
 
+        CarControl.droppedBoxes.Clear();
+        CargoPickup.heldByPickup.Clear();
+
         Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
         if (cargoParent == null) return;
 
+        // Find all cargo boxes including unparented ones
         List<Transform> boxes = new();
+        foreach (var go in GameObject.FindGameObjectsWithTag("CargoBox"))
+            boxes.Add(go.transform);
+
+        // Also check children
         foreach (Transform child in cargoParent)
         {
-            if (child.name.StartsWith("CargoBox"))
+            if (child.name.StartsWith("CargoBox") && !boxes.Contains(child))
                 boxes.Add(child);
         }
 
+        // Sort by name for consistent ordering
+        boxes.Sort((a, b) => string.Compare(a.name, b.name));
+
         for (int i = 0; i < boxes.Count && i < savedCargoSnapshots.Count; i++)
         {
+            // Re-parent to CargoBoxes
+            boxes[i].SetParent(cargoParent, false);
+
             Rigidbody boxRb = boxes[i].GetComponent<Rigidbody>();
             if (boxRb != null)
             {
@@ -241,12 +260,12 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             rb.isKinematic = false;
 
         Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent != null)
+        if (cargoParent == null) yield break;
+
+        foreach (Transform child in cargoParent)
         {
-            foreach (Transform child in cargoParent)
-            {
-                if (!child.name.StartsWith("CargoBox")) continue;
-                Rigidbody boxRb = child.GetComponent<Rigidbody>();
+            if (!child.name.StartsWith("CargoBox")) continue;
+            Rigidbody boxRb = child.GetComponent<Rigidbody>();
                 if (boxRb != null)
                 {
                     boxRb.isKinematic = false;

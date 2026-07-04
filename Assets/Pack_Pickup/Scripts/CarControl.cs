@@ -333,7 +333,16 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         }
         else
         {
-            targetPos = (Vector3)stream.ReceiveNext();
+            Vector3 newPos = (Vector3)stream.ReceiveNext();
+
+            if (Vector3.Distance(targetPos, newPos) > 10f)
+            {
+                droppedBoxes.Clear();
+                transform.position = newPos;
+                carSmoothVel = Vector3.zero;
+            }
+
+            targetPos = newPos;
             targetRot = (Quaternion)stream.ReceiveNext();
             currentTurnAngle = (float)stream.ReceiveNext();
 
