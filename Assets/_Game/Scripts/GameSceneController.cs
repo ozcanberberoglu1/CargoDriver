@@ -356,6 +356,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
             Vector3 localPos = ParseVec3(c[0], c[1], c[2]);
             Quaternion localRot = ParseQuat(c[3], c[4], c[5], c[6]);
+            Vector3 scale = ParseVec3(c[7], c[8], c[9]);
 
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
@@ -372,7 +373,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 box.transform.rotation = worldRot;
             }
 
-            box.transform.localScale = Vector3.one;
+            box.transform.localScale = scale;
             box.name = $"CargoBox_{i}";
 
             if (cargoParent != null)
