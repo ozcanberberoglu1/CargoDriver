@@ -204,15 +204,29 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         heldByPickup.Add(heldRb.transform);
         CarControl.droppedBoxes.Remove(heldRb.transform);
 
-        CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
-        if (sync != null)
-            sync.SetGrabbed(true);
-        else
-        {
-            heldRb.useGravity = false;
-            heldRb.linearDamping = 12f;
-            heldRb.angularDamping = 8f;
-        }
+        DisableBoxSyncComponents(heldRb.gameObject);
+
+        heldRb.useGravity = false;
+        heldRb.linearDamping = 12f;
+        heldRb.angularDamping = 8f;
+    }
+
+    private void DisableBoxSyncComponents(GameObject box)
+    {
+        PhotonTransformView ptv = box.GetComponent<PhotonTransformView>();
+        if (ptv != null) ptv.enabled = false;
+
+        CargoBoxSync cbs = box.GetComponent<CargoBoxSync>();
+        if (cbs != null) cbs.enabled = false;
+    }
+
+    private void EnableBoxSyncComponents(GameObject box)
+    {
+        PhotonTransformView ptv = box.GetComponent<PhotonTransformView>();
+        if (ptv != null) ptv.enabled = true;
+
+        CargoBoxSync cbs = box.GetComponent<CargoBoxSync>();
+        if (cbs != null) cbs.enabled = true;
     }
 
     private void StopGrab()
@@ -221,15 +235,12 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             UpdateCarControlTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
+            EnableBoxSyncComponents(heldRb.gameObject);
 
             heldRb.isKinematic = false;
             heldRb.useGravity = true;
             heldRb.linearDamping = 0f;
             heldRb.angularDamping = 0.05f;
-
-            CargoBoxSync sync = heldRb.GetComponent<CargoBoxSync>();
-            if (sync != null)
-                sync.SetGrabbed(false);
         }
         heldRb = null;
         heldPV = null;
@@ -367,6 +378,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                         heldRb.linearDamping = 0f;
                         heldByPickup.Add(heldRb.transform);
                         CarControl.droppedBoxes.Remove(heldRb.transform);
+                        DisableBoxSyncComponents(heldRb.gameObject);
                     }
                 }
             }
@@ -383,6 +395,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             {
                 UpdateCarControlTarget(heldRb.transform);
                 heldByPickup.Remove(heldRb.transform);
+                EnableBoxSyncComponents(heldRb.gameObject);
                 heldRb.isKinematic = false;
                 heldRb.useGravity = true;
                 heldRb.linearDamping = 0f;
