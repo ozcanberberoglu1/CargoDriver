@@ -22,7 +22,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     private float currentTurnAngle;
 
     private Transform[] cargoBoxTransforms;
-    public static readonly System.Collections.Generic.HashSet<Transform> droppedBoxes = new();
 
     private Vector3 targetPos;
     private Quaternion targetRot;
@@ -160,7 +159,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             {
                 if (cargoBoxTransforms[i] == null) continue;
                 if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
-                if (droppedBoxes.Contains(cargoBoxTransforms[i])) continue;
                 cargoBoxTransforms[i].position = Vector3.SmoothDamp(
                     cargoBoxTransforms[i].position, cargoTargetPos[i], ref cargoSmoothVel[i], smooth);
                 cargoBoxTransforms[i].rotation = Quaternion.Slerp(
@@ -337,7 +335,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 
             if (Vector3.Distance(targetPos, newPos) > 10f)
             {
-                droppedBoxes.Clear();
                 transform.position = newPos;
                 carSmoothVel = Vector3.zero;
             }

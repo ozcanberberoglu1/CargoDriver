@@ -212,7 +212,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     {
         if (spawnedPickup == null) return;
 
-        CarControl.droppedBoxes.Clear();
         CargoPickup.heldByPickup.Clear();
 
         Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");

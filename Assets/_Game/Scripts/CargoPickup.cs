@@ -202,7 +202,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         }
 
         heldByPickup.Add(heldRb.transform);
-        CarControl.droppedBoxes.Remove(heldRb.transform);
 
         DisableBoxSyncComponents(heldRb.gameObject);
 
@@ -233,7 +232,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     {
         if (heldRb != null)
         {
-            UpdateCarControlTarget(heldRb.transform);
+            UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
             EnableBoxSyncComponents(heldRb.gameObject);
 
@@ -247,9 +246,29 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         isHolding = false;
     }
 
-    private void UpdateCarControlTarget(Transform box)
+    private void UpdateCargoTarget(Transform box)
     {
-        CarControl.droppedBoxes.Add(box);
+        CarControl cc = FindAnyObjectByType<CarControl>();
+        if (cc == null) return;
+
+        var field = typeof(CarControl).GetField("cargoTargetPos",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var fieldT = typeof(CarControl).GetField("cargoBoxTransforms",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (field == null || fieldT == null) return;
+
+        var targets = (Vector3[])field.GetValue(cc);
+        var transforms = (Transform[])fieldT.GetValue(cc);
+        if (targets == null || transforms == null) return;
+
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            if (transforms[i] == box)
+            {
+                targets[i] = box.position;
+                break;
+            }
+        }
     }
 
     private void CarryObject()
@@ -377,7 +396,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                         heldRb.useGravity = false;
                         heldRb.linearDamping = 0f;
                         heldByPickup.Add(heldRb.transform);
-                        CarControl.droppedBoxes.Remove(heldRb.transform);
                         DisableBoxSyncComponents(heldRb.gameObject);
                     }
                 }
@@ -393,7 +411,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             if (heldRb != null)
             {
-                UpdateCarControlTarget(heldRb.transform);
+                UpdateCargoTarget(heldRb.transform);
                 heldByPickup.Remove(heldRb.transform);
                 EnableBoxSyncComponents(heldRb.gameObject);
                 heldRb.isKinematic = false;
