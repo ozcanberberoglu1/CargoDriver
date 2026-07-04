@@ -28,8 +28,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     private Vector3 syncPos;
     private Quaternion syncRot;
     private Vector3 syncVel;
-    private float syncAngVelY;
-    private float inputSendTimer;
 
     private const byte INPUT_EVENT = 42;
     private readonly Dictionary<int, float[]> remoteInputs = new();
@@ -50,6 +48,9 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             syncRot = rb.rotation;
         }
 
+        PhotonNetwork.SendRate = 30;
+        PhotonNetwork.SerializationRate = 30;
+
         if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
         {
             rb.isKinematic = true;
@@ -64,17 +65,25 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     {
         yield return new WaitForSeconds(3f);
 
-        var list = new System.Collections.Generic.List<Transform>();
+        var list = new List<Transform>();
         foreach (Transform child in transform)
-        {
             FindCargoRecursive(child, list);
-        }
+
         cargoBoxTransforms = list.ToArray();
         syncCargoPos = new Vector3[cargoBoxTransforms.Length];
         syncCargoRot = new Quaternion[cargoBoxTransforms.Length];
+
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            foreach (var t in cargoBoxTransforms)
+            {
+                if (t == null) continue;
+                t.SetParent(null, true);
+            }
+        }
     }
 
-    private void FindCargoRecursive(Transform t, System.Collections.Generic.List<Transform> list)
+    private void FindCargoRecursive(Transform t, List<Transform> list)
     {
         if (t.name.StartsWith("CargoBox"))
             list.Add(t);
@@ -113,36 +122,30 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         }
         else
         {
-            // Prediction: move toward sync position using velocity
-            Vector3 predicted = syncPos + syncVel * Time.fixedDeltaTime;
-            float dist = Vector3.Distance(transform.position, predicted);
-
-            if (dist > 5f)
-            {
-                transform.position = syncPos;
-                transform.rotation = syncRot;
-            }
-            else
-            {
-                transform.position = Vector3.MoveTowards(transform.position, predicted, 
-                    Mathf.Max(dist * 20f, syncVel.magnitude * 1.5f) * Time.fixedDeltaTime);
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, syncRot, 
-                    360f * Time.fixedDeltaTime);
-            }
+            transform.position = syncPos;
+            transform.rotation = syncRot;
 
             if (steeringWheel != null)
                 steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
 
             for (int i = 0; i < wheelMeshes.Length && i < wheels.Length; i++)
             {
-                Quaternion rot;
-                if (i < 2)
-                    rot = transform.rotation * Quaternion.Euler(0f, currentTurnAngle, 0f);
-                else
-                    rot = transform.rotation;
-
+                Quaternion rot = i < 2
+                    ? transform.rotation * Quaternion.Euler(0f, currentTurnAngle, 0f)
+                    : transform.rotation;
                 wheelMeshes[i].position = wheels[i].position;
                 wheelMeshes[i].rotation = rot;
+            }
+
+            if (cargoBoxTransforms != null && syncCargoPos != null)
+            {
+                int count = Mathf.Min(cargoBoxTransforms.Length, syncCargoPos.Length);
+                for (int i = 0; i < count; i++)
+                {
+                    if (cargoBoxTransforms[i] == null) continue;
+                    cargoBoxTransforms[i].position = syncCargoPos[i];
+                    cargoBoxTransforms[i].rotation = syncCargoRot[i];
+                }
             }
         }
     }
@@ -152,10 +155,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     private void SendMyInput()
     {
         if (PhotonNetwork.IsMasterClient) return;
-
-        inputSendTimer += Time.fixedDeltaTime;
-        if (inputSendTimer < 0.05f) return;
-        inputSendTimer = 0f;
 
         Keyboard kb = Keyboard.current;
         if (kb == null) return;
@@ -344,20 +343,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
                 syncCargoPos[i] = (Vector3)stream.ReceiveNext();
                 syncCargoRot[i] = (Quaternion)stream.ReceiveNext();
             }
-        }
-    }
-
-    private void LateUpdate()
-    {
-        if (PhotonNetwork.IsMasterClient) return;
-        if (cargoBoxTransforms == null || syncCargoPos == null) return;
-
-        int count = Mathf.Min(cargoBoxTransforms.Length, syncCargoPos.Length);
-        for (int i = 0; i < count; i++)
-        {
-            if (cargoBoxTransforms[i] == null) continue;
-            cargoBoxTransforms[i].position = syncCargoPos[i];
-            cargoBoxTransforms[i].rotation = syncCargoRot[i];
         }
     }
 
