@@ -72,6 +72,13 @@ public class ToyController : MonoBehaviourPun
                 playerCamera.gameObject.SetActive(false);
 
             controller.enabled = false;
+
+            foreach (Collider col in GetComponentsInChildren<Collider>())
+            {
+                if (col is CharacterController) continue;
+                col.enabled = false;
+            }
+
             return;
         }
 
