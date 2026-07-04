@@ -23,14 +23,12 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 
     private Transform[] cargoBoxTransforms;
 
-    // Interpolation buffer
-    private Vector3 posFrom, posTo;
-    private Quaternion rotFrom, rotTo;
-    private Vector3 velocity;
-    private Vector3[][] cargoFromPos, cargoToPos;
-    private Quaternion[][] cargoFromRot, cargoToRot;
-    private float interpTime;
-    private float interpDuration = 0.033f;
+    private Vector3 targetPos;
+    private Quaternion targetRot;
+    private Vector3 carSmoothVel;
+    private Vector3[] cargoTargetPos;
+    private Quaternion[] cargoTargetRot;
+    private Vector3[] cargoSmoothVel;
     private float wheelSpin;
 
     private const byte INPUT_EVENT = 42;
@@ -48,8 +46,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 
         if (rb != null)
         {
-            posFrom = posTo = rb.position;
-            rotFrom = rotTo = rb.rotation;
+            targetPos = rb.position;
+            targetRot = rb.rotation;
         }
 
         PhotonNetwork.SendRate = 60;
@@ -75,19 +73,15 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 
         cargoBoxTransforms = list.ToArray();
         int n = cargoBoxTransforms.Length;
-
-        cargoFromPos = new Vector3[][] { new Vector3[n], new Vector3[n] };
-        cargoToPos = new Vector3[][] { new Vector3[n], new Vector3[n] };
-        cargoFromRot = new Quaternion[][] { new Quaternion[n], new Quaternion[n] };
-        cargoToRot = new Quaternion[][] { new Quaternion[n], new Quaternion[n] };
+        cargoTargetPos = new Vector3[n];
+        cargoTargetRot = new Quaternion[n];
+        cargoSmoothVel = new Vector3[n];
 
         for (int i = 0; i < n; i++)
         {
             if (cargoBoxTransforms[i] == null) continue;
-            Vector3 p = cargoBoxTransforms[i].position;
-            Quaternion r = cargoBoxTransforms[i].rotation;
-            cargoFromPos[0][i] = cargoToPos[0][i] = p;
-            cargoFromRot[0][i] = cargoToRot[0][i] = r;
+            cargoTargetPos[i] = cargoBoxTransforms[i].position;
+            cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
         if (!PhotonNetwork.IsMasterClient)
@@ -136,17 +130,15 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     {
         if (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient) return;
 
-        interpTime += Time.deltaTime;
-        float t = interpDuration > 0f ? Mathf.Clamp01(interpTime / interpDuration) : 1f;
-
-        transform.position = Vector3.Lerp(posFrom, posTo, t);
-        transform.rotation = Quaternion.Slerp(rotFrom, rotTo, t);
+        float smooth = 0.04f;
+        transform.position = Vector3.SmoothDamp(transform.position, targetPos, ref carSmoothVel, smooth);
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 25f);
 
         if (steeringWheel != null)
             steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
 
-        float speed = (posTo - posFrom).magnitude / Mathf.Max(interpDuration, 0.01f);
-        wheelSpin += speed * Time.deltaTime * 200f;
+        float speed = carSmoothVel.magnitude;
+        wheelSpin += speed * Time.deltaTime * 60f;
 
         for (int i = 0; i < wheelMeshes.Length && i < wheels.Length; i++)
         {
@@ -160,16 +152,17 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             wheelMeshes[i].rotation = transform.rotation * steer * spin;
         }
 
-        if (cargoBoxTransforms != null && cargoFromPos != null)
+        if (cargoBoxTransforms != null && cargoTargetPos != null)
         {
-            int count = Mathf.Min(cargoBoxTransforms.Length,
-                cargoFromPos[0] != null ? cargoFromPos[0].Length : 0);
+            int count = Mathf.Min(cargoBoxTransforms.Length, cargoTargetPos.Length);
             for (int i = 0; i < count; i++)
             {
                 if (cargoBoxTransforms[i] == null) continue;
                 if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
-                cargoBoxTransforms[i].position = Vector3.Lerp(cargoFromPos[0][i], cargoToPos[0][i], t);
-                cargoBoxTransforms[i].rotation = Quaternion.Slerp(cargoFromRot[0][i], cargoToRot[0][i], t);
+                cargoBoxTransforms[i].position = Vector3.SmoothDamp(
+                    cargoBoxTransforms[i].position, cargoTargetPos[i], ref cargoSmoothVel[i], smooth);
+                cargoBoxTransforms[i].rotation = Quaternion.Slerp(
+                    cargoBoxTransforms[i].rotation, cargoTargetRot[i], Time.deltaTime * 25f);
             }
         }
     }
@@ -338,36 +331,22 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         }
         else
         {
-            Vector3 prevTo = posTo;
-            posFrom = transform.position;
-            rotFrom = transform.rotation;
-            posTo = (Vector3)stream.ReceiveNext();
-            rotTo = (Quaternion)stream.ReceiveNext();
+            targetPos = (Vector3)stream.ReceiveNext();
+            targetRot = (Quaternion)stream.ReceiveNext();
             currentTurnAngle = (float)stream.ReceiveNext();
 
-            velocity = (posTo - prevTo) / interpDuration;
-            interpDuration = 1f / PhotonNetwork.SerializationRate;
-            interpTime = 0f;
-
             int boxCount = (int)stream.ReceiveNext();
-            if (cargoFromPos == null || cargoFromPos[0].Length != boxCount)
+            if (cargoTargetPos == null || cargoTargetPos.Length != boxCount)
             {
-                cargoFromPos = new Vector3[][] { new Vector3[boxCount] };
-                cargoToPos = new Vector3[][] { new Vector3[boxCount] };
-                cargoFromRot = new Quaternion[][] { new Quaternion[boxCount] };
-                cargoToRot = new Quaternion[][] { new Quaternion[boxCount] };
+                cargoTargetPos = new Vector3[boxCount];
+                cargoTargetRot = new Quaternion[boxCount];
+                cargoSmoothVel = new Vector3[boxCount];
             }
 
             for (int i = 0; i < boxCount; i++)
             {
-                if (cargoBoxTransforms != null && i < cargoBoxTransforms.Length && cargoBoxTransforms[i] != null)
-                {
-                    cargoFromPos[0][i] = cargoBoxTransforms[i].position;
-                    cargoFromRot[0][i] = cargoBoxTransforms[i].rotation;
-                }
-
-                cargoToPos[0][i] = (Vector3)stream.ReceiveNext();
-                cargoToRot[0][i] = (Quaternion)stream.ReceiveNext();
+                cargoTargetPos[i] = (Vector3)stream.ReceiveNext();
+                cargoTargetRot[i] = (Quaternion)stream.ReceiveNext();
             }
         }
     }
