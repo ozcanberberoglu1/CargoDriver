@@ -27,7 +27,8 @@ public class CarCamera : MonoBehaviour
     [SerializeField] private float interiorMaxPitch = 40f;
 
     [Header("Smoothing")]
-    [SerializeField] private float positionSmoothTime = 0.1f;
+    [SerializeField] private float positionSmoothTime = 0.25f;
+    [SerializeField] private float targetSmoothSpeed = 6f;
     [SerializeField] private float lookHeight = 1.5f;
 
     private int currentAngle;
@@ -104,7 +105,7 @@ public class CarCamera : MonoBehaviour
     {
         if (target == null || allAngles.Count == 0) return;
 
-        smoothTarget = Vector3.Lerp(smoothTarget, target.position, Time.deltaTime * 12f);
+        smoothTarget = Vector3.Lerp(smoothTarget, target.position, Time.deltaTime * targetSmoothSpeed);
 
         object current = allAngles[currentAngle];
 
@@ -117,7 +118,8 @@ public class CarCamera : MonoBehaviour
                 transform.position, desiredPos, ref smoothVelocity, positionSmoothTime);
 
             Vector3 lookTarget = smoothTarget + Vector3.up * lookHeight;
-            transform.rotation = Quaternion.LookRotation(lookTarget - transform.position);
+            Quaternion desiredRot = Quaternion.LookRotation(lookTarget - transform.position);
+            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRot, Time.deltaTime * 8f);
         }
         else if (current is Transform camPos)
         {
