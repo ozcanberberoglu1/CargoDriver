@@ -79,6 +79,7 @@ public class ToyController : MonoBehaviourPun
                 col.enabled = false;
             }
 
+            StartCoroutine(TryAttachToPickupRemote());
             return;
         }
 
@@ -285,6 +286,43 @@ public class ToyController : MonoBehaviourPun
             if (cam.GetComponentInParent<ToyController>() != null) continue;
             cam.gameObject.SetActive(false);
         }
+    }
+
+    private System.Collections.IEnumerator TryAttachToPickupRemote()
+    {
+        yield return new WaitForSeconds(3f);
+
+        if (!PhotonNetwork.InRoom) yield break;
+
+        var props = PhotonNetwork.CurrentRoom.CustomProperties;
+        object val;
+        props.TryGetValue("ctrl_Behind", out val);
+        int behindActor = val != null ? (int)val : -1;
+
+        if (behindActor != photonView.Owner.ActorNumber) yield break;
+
+        GameObject pickup = null;
+        foreach (var pv in FindObjectsByType<PhotonView>(FindObjectsSortMode.None))
+        {
+            if (pv.GetComponent<CarControl>() != null)
+            {
+                pickup = pv.gameObject;
+                break;
+            }
+        }
+
+        if (pickup == null) yield break;
+
+        PhotonTransformView ptv = GetComponent<PhotonTransformView>();
+        if (ptv != null)
+            ptv.enabled = false;
+
+        Transform spawnPoint = pickup.transform.Find("PlayerCarSpawn");
+        Transform parent = spawnPoint != null ? spawnPoint : pickup.transform;
+
+        transform.SetParent(parent, false);
+        transform.localPosition = Vector3.zero;
+        transform.localRotation = Quaternion.identity;
     }
 
     private void SetPlayerLayer()

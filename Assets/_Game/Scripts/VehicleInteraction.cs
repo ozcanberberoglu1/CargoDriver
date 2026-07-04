@@ -85,8 +85,15 @@ public class VehicleInteraction : MonoBehaviour
         DisableCarCamera();
 
         Transform spawnPoint = pickup.transform.Find("PlayerCarSpawn");
-        behindAnchor = spawnPoint != null ? spawnPoint : pickup.transform;
-        spawnedPlayer.transform.position = behindAnchor.position;
+        Transform parent = spawnPoint != null ? spawnPoint : pickup.transform;
+
+        PhotonTransformView ptv = spawnedPlayer.GetComponent<PhotonTransformView>();
+        if (ptv != null)
+            ptv.enabled = false;
+
+        spawnedPlayer.transform.SetParent(parent, false);
+        spawnedPlayer.transform.localPosition = Vector3.zero;
+        spawnedPlayer.transform.localRotation = Quaternion.identity;
     }
 
     private void DisableCarCamera()
@@ -96,13 +103,6 @@ public class VehicleInteraction : MonoBehaviour
             cc.enabled = false;
             cc.gameObject.SetActive(false);
         }
-    }
-
-    private void LateUpdate()
-    {
-        if (!isBehindPlayer || spawnedPlayer == null || behindAnchor == null) return;
-
-        spawnedPlayer.transform.position = behindAnchor.position;
     }
 
     private void Update()
