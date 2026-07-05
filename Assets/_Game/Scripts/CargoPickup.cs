@@ -469,6 +469,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private string syncHeldName = "";
     private bool syncDropTracking;
     private GameObject dropTrackObj;
+    private Vector3 dropSmoothVel;
 
     private void RemoteSync()
     {
@@ -535,11 +536,35 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         if (syncDropTracking && dropTrackObj != null)
         {
-            Vector3 vel = Vector3.zero;
+            PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
+            if (ptv != null && ptv.enabled) ptv.enabled = false;
+            CargoBoxSync cbs = dropTrackObj.GetComponent<CargoBoxSync>();
+            if (cbs != null && cbs.enabled) cbs.enabled = false;
+
+            Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
+            if (dropRb != null) dropRb.isKinematic = true;
+
             dropTrackObj.transform.position = Vector3.SmoothDamp(
-                dropTrackObj.transform.position, syncHeldTargetPos, ref vel, 0.04f);
+                dropTrackObj.transform.position, syncHeldTargetPos, ref dropSmoothVel, 0.06f);
             dropTrackObj.transform.rotation = Quaternion.Slerp(
-                dropTrackObj.transform.rotation, syncHeldTargetRot, Time.deltaTime * 20f);
+                dropTrackObj.transform.rotation, syncHeldTargetRot, Time.deltaTime * 15f);
+        }
+        else if (!syncDropTracking && dropTrackObj != null)
+        {
+            Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
+            if (dropRb != null)
+            {
+                dropRb.isKinematic = false;
+                dropRb.useGravity = true;
+            }
+
+            PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
+            if (ptv != null) ptv.enabled = true;
+            CargoBoxSync cbs = dropTrackObj.GetComponent<CargoBoxSync>();
+            if (cbs != null) cbs.enabled = true;
+
+            dropSmoothVel = Vector3.zero;
+            dropTrackObj = null;
         }
     }
 
