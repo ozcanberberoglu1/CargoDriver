@@ -214,7 +214,7 @@ MonoBehaviour:
   active: 1
   mode:
     m_OverrideState: 1
-    m_Value: 0
+    m_Value: 1
   neutralHDRRangeReductionMode:
     m_OverrideState: 1
     m_Value: 2
@@ -556,7 +556,7 @@ MonoBehaviour:
     m_Value: {x: 1, y: 1, z: 1, w: 0}
   highlights:
     m_OverrideState: 1
-    m_Value: {x: 1, y: 1, z: 1, w: 0.071748875}
+    m_Value: {x: 1, y: 1, z: 1, w: 0.10849911}
   shadowsStart:
     m_OverrideState: 1
     m_Value: 0

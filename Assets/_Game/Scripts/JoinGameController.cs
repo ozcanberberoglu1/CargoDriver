@@ -434,7 +434,9 @@ public class JoinGameController : MonoBehaviourPunCallbacks
             Quaternion localRot = Quaternion.Inverse(pickup.transform.rotation) * box.transform.rotation;
             Vector3 scale = box.transform.localScale;
 
-            data += $";{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)},{F(scale.x)},{F(scale.y)},{F(scale.z)}";
+            string prefabName = GetPrefabName(box);
+
+            data += $";{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)},{F(scale.x)},{F(scale.y)},{F(scale.z)},{prefabName}";
         }
 
         Debug.Log($"[JoinGame] Saving cargo data: {data}");
@@ -442,6 +444,18 @@ public class JoinGameController : MonoBehaviourPunCallbacks
     }
 
     private string F(float v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private string GetPrefabName(GameObject obj)
+    {
+#if UNITY_EDITOR
+        var prefab = UnityEditor.PrefabUtility.GetCorrespondingObjectFromSource(obj);
+        if (prefab != null) return prefab.name;
+#endif
+        string name = obj.name.Replace("(Clone)", "").Trim();
+        int parenIdx = name.IndexOf(" (");
+        if (parenIdx > 0) name = name.Substring(0, parenIdx);
+        return name;
+    }
 
     #endregion
 

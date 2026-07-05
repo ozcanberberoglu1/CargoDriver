@@ -13,8 +13,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     [SerializeField] private Transform carSpawnArea;
     [SerializeField] private string pickupPrefabName = "Pickup";
 
-    [Header("Cargo Box Prefab")]
-    [SerializeField] private GameObject cargoBoxPrefab;
+    [Header("Cargo Box Prefabs")]
+    [SerializeField] private List<GameObject> cargoBoxPrefabs;
 
     [Header("Death")]
     [SerializeField] private Collider deadCollider;
@@ -389,14 +389,16 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Vector3 localPos = ParseVec3(c[0], c[1], c[2]);
             Quaternion localRot = ParseQuat(c[3], c[4], c[5], c[6]);
             Vector3 scale = ParseVec3(c[7], c[8], c[9]);
+            string prefabName = c.Length > 10 ? c[10] : "";
 
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
 
+            GameObject prefab = FindCargoPrefab(prefabName);
             GameObject box;
-            if (cargoBoxPrefab != null)
+            if (prefab != null)
             {
-                box = Instantiate(cargoBoxPrefab, worldPos, worldRot);
+                box = Instantiate(prefab, worldPos, worldRot);
             }
             else
             {
@@ -435,6 +437,23 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     }
 
     #endregion
+
+    private GameObject FindCargoPrefab(string prefabName)
+    {
+        if (cargoBoxPrefabs != null && !string.IsNullOrEmpty(prefabName))
+        {
+            foreach (var p in cargoBoxPrefabs)
+            {
+                if (p != null && p.name == prefabName)
+                    return p;
+            }
+        }
+
+        if (cargoBoxPrefabs != null && cargoBoxPrefabs.Count > 0 && cargoBoxPrefabs[0] != null)
+            return cargoBoxPrefabs[0];
+
+        return null;
+    }
 
     #region Parsing
 
