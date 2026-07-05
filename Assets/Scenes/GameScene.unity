@@ -8098,7 +8098,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameSceneController
   carSpawnArea: {fileID: 813868639}
   pickupPrefabName: Pickup
-  cargoBoxPrefab: {fileID: 987203580900897118, guid: 2019780f400974ef1952b804dae03397, type: 3}
+  cargoBoxPrefab: {fileID: 4543337505863657342, guid: 2019780f400974ef1952b804dae03397, type: 3}
   deadCollider: {fileID: 273640137}
   checkpoints:
   - levelName: Level1
