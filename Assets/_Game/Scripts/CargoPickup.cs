@@ -314,7 +314,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (!snap.TrySnap()) return false;
 
         heldByPickup.Remove(heldRb.transform);
-        EnableBoxSyncComponents(heldRb.gameObject);
+        DisableBoxSyncComponents(heldRb.gameObject);
         heldRb = null;
         heldPV = null;
         isHolding = false;
