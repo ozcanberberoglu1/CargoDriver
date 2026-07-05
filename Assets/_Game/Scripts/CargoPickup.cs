@@ -37,6 +37,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private bool isHolding;
     private float currentHoldDist;
 
+    private Transform recentlyDropped;
+    private float droppedTimer;
+
     private bool syncHolding;
     private int syncHeldId = -1;
 
@@ -63,6 +66,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             RemoteSync();
             return;
         }
+
+        if (droppedTimer > 0f)
+            droppedTimer -= Time.deltaTime;
 
         ToyController tc = GetComponent<ToyController>();
         if (tc != null && tc.IsPaused) return;
@@ -295,6 +301,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
 
+            recentlyDropped = heldRb.transform;
+            droppedTimer = 3f;
+
             heldRb.isKinematic = false;
             heldRb.useGravity = true;
             heldRb.linearDamping = 0f;
@@ -526,14 +535,25 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     {
         if (stream.IsWriting)
         {
+            bool tracking = isHolding || (droppedTimer > 0f && recentlyDropped != null);
+            Transform tracked = isHolding && heldRb != null ? heldRb.transform : recentlyDropped;
+
             stream.SendNext(isHolding);
             stream.SendNext(heldPV != null ? heldPV.ViewID : -1);
-            stream.SendNext(heldRb != null ? heldRb.gameObject.name : "");
+            stream.SendNext(tracked != null ? tracked.gameObject.name : "");
 
-            if (isHolding && heldRb != null)
-                stream.SendNext(heldRb.position);
+            if (tracking && tracked != null)
+            {
+                stream.SendNext(tracked.position);
+                stream.SendNext(tracked.rotation);
+            }
             else
+            {
                 stream.SendNext(Vector3.zero);
+                stream.SendNext(Quaternion.identity);
+            }
+
+            stream.SendNext(droppedTimer > 0f && !isHolding);
         }
         else
         {
@@ -541,6 +561,26 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             syncHeldId = (int)stream.ReceiveNext();
             syncHeldName = (string)stream.ReceiveNext();
             syncHeldTargetPos = (Vector3)stream.ReceiveNext();
+            Quaternion syncHeldTargetRot = (Quaternion)stream.ReceiveNext();
+            bool syncDropTracking = (bool)stream.ReceiveNext();
+
+            if (syncDropTracking && !syncHolding && !string.IsNullOrEmpty(syncHeldName))
+            {
+                GameObject found = null;
+                if (syncHeldId >= 0)
+                {
+                    PhotonView pv = PhotonView.Find(syncHeldId);
+                    if (pv != null) found = pv.gameObject;
+                }
+                if (found == null)
+                    found = GameObject.Find(syncHeldName);
+
+                if (found != null)
+                {
+                    found.transform.position = syncHeldTargetPos;
+                    found.transform.rotation = syncHeldTargetRot;
+                }
+            }
         }
     }
 
