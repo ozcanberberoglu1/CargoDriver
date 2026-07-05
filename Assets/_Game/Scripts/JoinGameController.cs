@@ -427,16 +427,36 @@ public class JoinGameController : MonoBehaviourPunCallbacks
 
         string data = $"{F(pickupPos.x)},{F(pickupPos.y)},{F(pickupPos.z)}|{F(pickupRot.x)},{F(pickupRot.y)},{F(pickupRot.z)},{F(pickupRot.w)}|{F(pickupScale.x)},{F(pickupScale.y)},{F(pickupScale.z)}";
 
+        var allBoxes = new List<GameObject>();
         foreach (GameObject box in boxes)
         {
             if (box == null) continue;
+            CollectAllLegos(box.transform, allBoxes);
+        }
+
+        for (int idx = 0; idx < allBoxes.Count; idx++)
+        {
+            GameObject box = allBoxes[idx];
             Vector3 localPos = pickup.transform.InverseTransformPoint(box.transform.position);
             Quaternion localRot = Quaternion.Inverse(pickup.transform.rotation) * box.transform.rotation;
-            Vector3 scale = box.transform.localScale;
-
+            Vector3 scale = box.transform.lossyScale;
             string prefabName = GetPrefabName(box);
 
-            data += $";{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)},{F(scale.x)},{F(scale.y)},{F(scale.z)},{prefabName}";
+            int parentIdx = -1;
+            LegoSnap snap = box.GetComponent<LegoSnap>();
+            if (snap != null && snap.HasParent)
+            {
+                LegoSnap parentSnap = snap.GetRoot();
+                Transform p = box.transform.parent;
+                if (p != null)
+                {
+                    LegoSnap pSnap = p.GetComponent<LegoSnap>();
+                    if (pSnap != null)
+                        parentIdx = allBoxes.IndexOf(p.gameObject);
+                }
+            }
+
+            data += $";{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)},{F(scale.x)},{F(scale.y)},{F(scale.z)},{prefabName},{parentIdx}";
         }
 
         Debug.Log($"[JoinGame] Saving cargo data: {data}");
@@ -444,6 +464,17 @@ public class JoinGameController : MonoBehaviourPunCallbacks
     }
 
     private string F(float v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private void CollectAllLegos(Transform t, List<GameObject> result)
+    {
+        if (result.Contains(t.gameObject)) return;
+        result.Add(t.gameObject);
+        foreach (Transform child in t)
+        {
+            if (child.GetComponent<LegoSnap>() != null)
+                CollectAllLegos(child, result);
+        }
+    }
 
     private string GetPrefabName(GameObject obj)
     {

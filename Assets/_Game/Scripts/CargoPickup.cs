@@ -6,8 +6,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 {
     public static readonly System.Collections.Generic.HashSet<Transform> heldByPickup = new();
     [Header("Grab")]
-    [SerializeField] public float detectRange = 2.5f;
-    [SerializeField] public float grabDistance = 0.5f;
+    [SerializeField] public float detectRange = 5f;
+    [SerializeField] public float grabDistance = 1.5f;
     [SerializeField] private float holdForward = 0.7f;
     [SerializeField] private float holdUp = 0.6f;
     [SerializeField] private LayerMask cargoLayer = ~0;
@@ -80,7 +80,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             {
                 Transform box = FindLookedAtBox();
                 if (box != null)
-                    StartGrab(box.GetComponent<Rigidbody>());
+                    StartGrab(FindGrabbableRb(box));
             }
             else
             {
@@ -89,13 +89,33 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                 {
                     float d = Vector3.Distance(rHand.position, box.position);
                     if (d < grabDistance)
-                        StartGrab(box.GetComponent<Rigidbody>());
+                        StartGrab(FindGrabbableRb(box));
                 }
             }
         }
-        else if (isHolding && !pressing)
+        else if (isHolding)
         {
-            StopGrab();
+            bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
+
+            if (!isGameScene)
+            {
+                Keyboard kb = Keyboard.current;
+                if (kb != null)
+                {
+                    if (kb.eKey.wasPressedThisFrame)
+                    {
+                        if (TrySnapHeld())
+                            return;
+                    }
+                    else if (kb.xKey.wasPressedThisFrame)
+                        DetachHeldFromBelow();
+                    else if (kb.zKey.wasPressedThisFrame)
+                        DetachAllHeld();
+                }
+            }
+
+            if (!pressing)
+                StopGrab();
         }
     }
 
@@ -147,6 +167,34 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     #region Grab
 
+    private bool IsCargoBox(Transform t)
+    {
+        if (t.CompareTag("CargoBox")) return true;
+        if (t.GetComponent<LegoSnap>() != null) return true;
+        if (t.GetComponentInParent<LegoSnap>() != null) return true;
+        return false;
+    }
+
+    private Rigidbody FindGrabbableRb(Transform box)
+    {
+        Rigidbody rb = box.GetComponent<Rigidbody>();
+        if (rb != null) return rb;
+
+        LegoSnap snap = box.GetComponent<LegoSnap>();
+        if (snap == null)
+            snap = box.GetComponentInParent<LegoSnap>();
+
+        if (snap != null)
+        {
+            LegoSnap root = snap.GetRoot();
+            rb = root.GetComponent<Rigidbody>();
+            if (rb != null) return rb;
+        }
+
+        rb = box.GetComponentInParent<Rigidbody>();
+        return rb;
+    }
+
     private Transform FindLookedAtBox()
     {
         Camera cam = GetComponentInChildren<Camera>();
@@ -155,7 +203,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         Ray ray = new(cam.transform.position, cam.transform.forward);
         if (Physics.Raycast(ray, out RaycastHit hit, detectRange, cargoLayer))
         {
-            if (hit.collider.CompareTag("CargoBox"))
+            if (IsCargoBox(hit.collider.transform))
                 return hit.collider.transform;
         }
         return null;
@@ -169,7 +217,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         foreach (Collider col in hits)
         {
-            if (!col.CompareTag("CargoBox")) continue;
+            if (!IsCargoBox(col.transform)) continue;
             float d = Vector3.Distance(transform.position, col.transform.position);
             if (d < bestDist)
             {
@@ -201,10 +249,22 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             Debug.LogError($"[CargoPickup] NO PhotonView on {rb.gameObject.name}!");
         }
 
+        LegoSnap snap = heldRb.GetComponent<LegoSnap>();
+        if (snap != null)
+        {
+            LegoSnap root = snap.GetRoot();
+            if (root != snap)
+            {
+                heldRb = root.GetComponent<Rigidbody>();
+                heldPV = root.GetComponent<PhotonView>();
+            }
+        }
+
         heldByPickup.Add(heldRb.transform);
 
         DisableBoxSyncComponents(heldRb.gameObject);
 
+        heldRb.isKinematic = false;
         heldRb.useGravity = false;
         heldRb.linearDamping = 12f;
         heldRb.angularDamping = 8f;
@@ -244,6 +304,37 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         heldRb = null;
         heldPV = null;
         isHolding = false;
+    }
+
+    private bool TrySnapHeld()
+    {
+        if (heldRb == null) return false;
+        LegoSnap snap = heldRb.GetComponent<LegoSnap>();
+        if (snap == null) return false;
+        if (!snap.TrySnap()) return false;
+
+        heldByPickup.Remove(heldRb.transform);
+        EnableBoxSyncComponents(heldRb.gameObject);
+        heldRb = null;
+        heldPV = null;
+        isHolding = false;
+        return true;
+    }
+
+    private void DetachHeldFromBelow()
+    {
+        if (heldRb == null) return;
+        LegoSnap snap = heldRb.GetComponent<LegoSnap>();
+        if (snap == null) return;
+        snap.DetachFromParent();
+    }
+
+    private void DetachAllHeld()
+    {
+        if (heldRb == null) return;
+        LegoSnap snap = heldRb.GetComponent<LegoSnap>();
+        if (snap == null) return;
+        snap.DetachAll();
     }
 
     private void UpdateCargoTarget(Transform box)

@@ -227,6 +227,7 @@ GameObject:
   - component: {fileID: 5667117703686208683}
   - component: {fileID: 7905171300209054132}
   - component: {fileID: 7383877081900501781}
+  - component: {fileID: 7565924998951726543}
   m_Layer: 0
   m_Name: CargoBox2
   m_TagString: CargoBox
@@ -397,3 +398,17 @@ MonoBehaviour:
   m_SynchronizeRotation: 1
   m_SynchronizeScale: 0
   m_UseLocal: 1
+--- !u!114 &7565924998951726543
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5907373038970487393}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d29e58595dcf44dfa0ba8779b916884, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LegoSnap
+  snapDistance: 0.15
+  snapDepth: 0.05

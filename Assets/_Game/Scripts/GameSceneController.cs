@@ -25,6 +25,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     private GameObject spawnedPickup;
     private int currentCheckpointIndex;
     private List<CargoSnapshot> savedCargoSnapshots = new();
+    private Vector3 savedPickupPos;
+    private Quaternion savedPickupRot;
     private bool isDead;
 
     [Serializable]
@@ -37,8 +39,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     private class CargoSnapshot
     {
-        public Vector3 localPos;
-        public Quaternion localRot;
+        public Vector3 worldPos;
+        public Quaternion worldRot;
+        public Transform transform;
+        public Transform originalParent;
     }
 
     private IEnumerator Start()
@@ -164,16 +168,21 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         if (spawnedPickup == null) return;
 
-        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent == null) return;
+        savedPickupPos = spawnedPickup.transform.position;
+        savedPickupRot = spawnedPickup.transform.rotation;
 
-        foreach (Transform child in cargoParent)
+        var allBoxes = new List<Transform>();
+        foreach (var go in GameObject.FindGameObjectsWithTag("CargoBox"))
+            allBoxes.Add(go.transform);
+
+        foreach (Transform box in allBoxes)
         {
-            if (!child.name.StartsWith("CargoBox")) continue;
             savedCargoSnapshots.Add(new CargoSnapshot
             {
-                localPos = child.localPosition,
-                localRot = child.localRotation
+                worldPos = box.position,
+                worldRot = box.rotation,
+                transform = box,
+                originalParent = box.parent
             });
         }
     }
@@ -214,30 +223,17 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         CargoPickup.heldByPickup.Clear();
 
-        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent == null) return;
+        Vector3 posDelta = spawnedPickup.transform.position - savedPickupPos;
+        Quaternion rotDelta = spawnedPickup.transform.rotation * Quaternion.Inverse(savedPickupRot);
 
-        // Find all cargo boxes including unparented ones
-        List<Transform> boxes = new();
-        foreach (var go in GameObject.FindGameObjectsWithTag("CargoBox"))
-            boxes.Add(go.transform);
-
-        // Also check children
-        foreach (Transform child in cargoParent)
+        for (int i = 0; i < savedCargoSnapshots.Count; i++)
         {
-            if (child.name.StartsWith("CargoBox") && !boxes.Contains(child))
-                boxes.Add(child);
-        }
+            var snap = savedCargoSnapshots[i];
+            if (snap.transform == null) continue;
 
-        // Sort by name for consistent ordering
-        boxes.Sort((a, b) => string.Compare(a.name, b.name));
+            snap.transform.SetParent(snap.originalParent, true);
 
-        for (int i = 0; i < boxes.Count && i < savedCargoSnapshots.Count; i++)
-        {
-            // Re-parent to CargoBoxes
-            boxes[i].SetParent(cargoParent, false);
-
-            Rigidbody boxRb = boxes[i].GetComponent<Rigidbody>();
+            Rigidbody boxRb = snap.transform.GetComponent<Rigidbody>();
             if (boxRb != null)
             {
                 boxRb.isKinematic = true;
@@ -245,8 +241,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 boxRb.angularVelocity = Vector3.zero;
             }
 
-            boxes[i].localPosition = savedCargoSnapshots[i].localPos;
-            boxes[i].localRotation = savedCargoSnapshots[i].localRot;
+            Vector3 newPos = rotDelta * (snap.worldPos - savedPickupPos) + spawnedPickup.transform.position;
+            snap.transform.position = newPos;
+            snap.transform.rotation = rotDelta * snap.worldRot;
         }
     }
 
@@ -381,6 +378,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         Transform cargoParent = pickup.transform.Find("CargoBoxes");
 
+        var spawnedBoxes = new List<GameObject>();
+        var parentIndices = new List<int>();
+
         for (int i = 1; i < parts.Length; i++)
         {
             string[] c = parts[i].Split(',');
@@ -390,6 +390,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Quaternion localRot = ParseQuat(c[3], c[4], c[5], c[6]);
             Vector3 scale = ParseVec3(c[7], c[8], c[9]);
             string prefabName = c.Length > 10 ? c[10] : "";
+            int parentIdx = c.Length > 11 ? int.Parse(c[11]) : -1;
 
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
@@ -433,6 +434,29 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 rb.isKinematic = true;
                 rb.useGravity = false;
             }
+
+            spawnedBoxes.Add(box);
+            parentIndices.Add(parentIdx);
+        }
+
+        for (int i = 0; i < spawnedBoxes.Count; i++)
+        {
+            int pIdx = parentIndices[i];
+            if (pIdx < 0 || pIdx >= spawnedBoxes.Count) continue;
+
+            GameObject child = spawnedBoxes[i];
+            GameObject parent = spawnedBoxes[pIdx];
+
+            Rigidbody childRb = child.GetComponent<Rigidbody>();
+            if (childRb != null)
+                Destroy(childRb);
+
+            child.transform.SetParent(parent.transform, true);
+
+            LegoSnap childSnap = child.GetComponent<LegoSnap>();
+            LegoSnap parentSnap = parent.GetComponent<LegoSnap>();
+            if (childSnap != null && parentSnap != null)
+                childSnap.SetParentDirect(parentSnap);
         }
     }
 
