@@ -464,8 +464,11 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     #region Network
 
     private Vector3 syncHeldTargetPos;
+    private Quaternion syncHeldTargetRot = Quaternion.identity;
     private Vector3 heldSmoothVel;
     private string syncHeldName = "";
+    private bool syncDropTracking;
+    private GameObject dropTrackObj;
 
     private void RemoteSync()
     {
@@ -529,6 +532,15 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             SolveTwoBoneIK(rShoulder, rElbow, rHand, rUpperLen, rLowerLen, heldRb.position, ikWeight, true);
             SolveTwoBoneIK(lShoulder, lElbow, lHand, lUpperLen, lLowerLen, heldRb.position, ikWeight, false);
         }
+
+        if (syncDropTracking && dropTrackObj != null)
+        {
+            Vector3 vel = Vector3.zero;
+            dropTrackObj.transform.position = Vector3.SmoothDamp(
+                dropTrackObj.transform.position, syncHeldTargetPos, ref vel, 0.04f);
+            dropTrackObj.transform.rotation = Quaternion.Slerp(
+                dropTrackObj.transform.rotation, syncHeldTargetRot, Time.deltaTime * 20f);
+        }
     }
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
@@ -561,26 +573,22 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             syncHeldId = (int)stream.ReceiveNext();
             syncHeldName = (string)stream.ReceiveNext();
             syncHeldTargetPos = (Vector3)stream.ReceiveNext();
-            Quaternion syncHeldTargetRot = (Quaternion)stream.ReceiveNext();
-            bool syncDropTracking = (bool)stream.ReceiveNext();
+            syncHeldTargetRot = (Quaternion)stream.ReceiveNext();
+            syncDropTracking = (bool)stream.ReceiveNext();
 
-            if (syncDropTracking && !syncHolding && !string.IsNullOrEmpty(syncHeldName))
+            if (syncDropTracking && dropTrackObj == null && !string.IsNullOrEmpty(syncHeldName))
             {
-                GameObject found = null;
                 if (syncHeldId >= 0)
                 {
                     PhotonView pv = PhotonView.Find(syncHeldId);
-                    if (pv != null) found = pv.gameObject;
+                    if (pv != null) dropTrackObj = pv.gameObject;
                 }
-                if (found == null)
-                    found = GameObject.Find(syncHeldName);
-
-                if (found != null)
-                {
-                    found.transform.position = syncHeldTargetPos;
-                    found.transform.rotation = syncHeldTargetRot;
-                }
+                if (dropTrackObj == null)
+                    dropTrackObj = GameObject.Find(syncHeldName);
             }
+
+            if (!syncDropTracking)
+                dropTrackObj = null;
         }
     }
 
