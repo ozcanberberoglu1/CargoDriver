@@ -411,15 +411,17 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
     private Vector3 GetSpawnPosition()
     {
-        if (spawnPoints != null && spawnPoints.childCount > 0)
+        if (spawnPoints == null) return Vector3.zero;
+
+        if (spawnPoints.childCount > 0)
         {
             int index = (PhotonNetwork.LocalPlayer.ActorNumber - 1) % spawnPoints.childCount;
             return spawnPoints.GetChild(index).position;
         }
 
-        float angle = (PhotonNetwork.LocalPlayer.ActorNumber - 1) * 60f;
-        float radius = 2f;
-        Vector3 center = spawnPoints != null ? spawnPoints.position : Vector3.zero;
+        float angle = (PhotonNetwork.LocalPlayer.ActorNumber - 1) * 90f;
+        float radius = 1.5f;
+        Vector3 center = spawnPoints.position;
         center.x += Mathf.Cos(angle * Mathf.Deg2Rad) * radius;
         center.z += Mathf.Sin(angle * Mathf.Deg2Rad) * radius;
         return center;
