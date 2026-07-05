@@ -21,14 +21,16 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         CacheColliders();
     }
 
-    private void OnEnable()
+    public override void OnEnable()
     {
+        base.OnEnable();
         if (!allLegos.Contains(this))
             allLegos.Add(this);
     }
 
-    private void OnDisable()
+    public override void OnDisable()
     {
+        base.OnDisable();
         allLegos.Remove(this);
     }
 
