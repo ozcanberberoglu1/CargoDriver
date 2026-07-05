@@ -159,6 +159,9 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             {
                 if (cargoBoxTransforms[i] == null) continue;
                 if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
+                LegoSnap legoSnap = cargoBoxTransforms[i].GetComponent<LegoSnap>();
+                if (legoSnap != null && legoSnap.HasParent) continue;
+                if (cargoBoxTransforms[i].GetComponent<Rigidbody>() == null) continue;
                 cargoBoxTransforms[i].position = Vector3.SmoothDamp(
                     cargoBoxTransforms[i].position, cargoTargetPos[i], ref cargoSmoothVel[i], smooth);
                 cargoBoxTransforms[i].rotation = Quaternion.Slerp(
