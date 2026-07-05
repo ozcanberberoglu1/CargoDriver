@@ -295,11 +295,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
 
-            LegoSnap snap = heldRb.GetComponent<LegoSnap>();
-            bool hasChildren = snap != null && snap.GetAllConnected().Count > 1;
-
-            if (!hasChildren)
-                EnableBoxSyncComponents(heldRb.gameObject);
+            // Always re-enable sync on the root lego
+            PhotonTransformView ptv = heldRb.GetComponent<PhotonTransformView>();
+            if (ptv != null) ptv.enabled = true;
 
             heldRb.isKinematic = false;
             heldRb.useGravity = true;
