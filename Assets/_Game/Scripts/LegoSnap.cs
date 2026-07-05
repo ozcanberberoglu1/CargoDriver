@@ -103,7 +103,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         if (bestTarget == null) return false;
 
         SnapTo(bestTarget, bestMine, bestOther);
-        BroadcastSnap(bestTarget);
+        BroadcastSnap(bestTarget, transform.localPosition, transform.localRotation);
         return true;
     }
 
@@ -203,16 +203,19 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         return null;
     }
 
-    private void BroadcastSnap(LegoSnap target)
+    private void BroadcastSnap(LegoSnap target, Vector3 localPos, Quaternion localRot)
     {
         if (!PhotonNetwork.InRoom) return;
 
         snapEventCounter++;
         string myId = GetLegoId();
         string targetId = target.GetLegoId();
+        string F(float v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string posRot = $"{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)}";
+
         PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable
         {
-            { "legoSnap", $"{myId}|{targetId}|{snapEventCounter}" }
+            { "legoSnap", $"{myId}|{targetId}|{snapEventCounter}|{posRot}" }
         });
     }
 
@@ -238,21 +241,32 @@ public class LegoSnap : MonoBehaviourPunCallbacks
                 LegoSnap target = FindById(parts[1]);
                 if (target != null)
                 {
-                    Collider bestMine = null, bestOther = null;
-                    float bestDist = float.MaxValue;
-                    foreach (Collider myCol in snapColliders)
+                    parentLego = target;
+                    target.childLegos.Add(this);
+
+                    Rigidbody rb = GetComponent<Rigidbody>();
+                    if (rb != null)
                     {
-                        if (myCol == null) continue;
-                        foreach (Collider otherCol in target.snapColliders)
+                        rb.linearVelocity = Vector3.zero;
+                        rb.angularVelocity = Vector3.zero;
+                        Destroy(rb);
+                    }
+
+                    transform.SetParent(target.transform, true);
+
+                    if (parts.Length >= 4)
+                    {
+                        string[] pr = parts[3].Split(',');
+                        if (pr.Length >= 7)
                         {
-                            if (otherCol == null) continue;
-                            if (!IsCompatible(myCol, otherCol)) continue;
-                            float dist = Vector3.Distance(myCol.bounds.center, otherCol.bounds.center);
-                            if (dist < bestDist) { bestDist = dist; bestMine = myCol; bestOther = otherCol; }
+                            var ci = System.Globalization.CultureInfo.InvariantCulture;
+                            transform.localPosition = new Vector3(
+                                float.Parse(pr[0], ci), float.Parse(pr[1], ci), float.Parse(pr[2], ci));
+                            transform.localRotation = new Quaternion(
+                                float.Parse(pr[3], ci), float.Parse(pr[4], ci),
+                                float.Parse(pr[5], ci), float.Parse(pr[6], ci));
                         }
                     }
-                    if (bestMine != null && bestOther != null)
-                        SnapTo(target, bestMine, bestOther);
 
                     var ptv = GetComponent<PhotonTransformView>();
                     if (ptv != null) ptv.enabled = false;
