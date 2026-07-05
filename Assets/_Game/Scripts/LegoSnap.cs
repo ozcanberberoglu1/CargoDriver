@@ -138,42 +138,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         transform.SetParent(target.transform, true);
     }
 
-    public void SnapToByName(string targetName)
-    {
-        LegoSnap target = null;
-        foreach (var lego in allLegos)
-        {
-            if (lego != this && lego.gameObject.name == targetName)
-            {
-                target = lego;
-                break;
-            }
-        }
-        if (target == null) return;
-
-        Collider bestMine = null, bestOther = null;
-        float bestDist = float.MaxValue;
-
-        foreach (Collider myCol in snapColliders)
-        {
-            if (myCol == null) continue;
-            foreach (Collider otherCol in target.snapColliders)
-            {
-                if (otherCol == null) continue;
-                if (!IsCompatible(myCol, otherCol)) continue;
-                float dist = Vector3.Distance(myCol.bounds.center, otherCol.bounds.center);
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestMine = myCol;
-                    bestOther = otherCol;
-                }
-            }
-        }
-
-        if (bestMine != null && bestOther != null)
-            SnapTo(target, bestMine, bestOther);
-    }
+    
 
     #endregion
 
@@ -220,14 +185,32 @@ public class LegoSnap : MonoBehaviourPunCallbacks
 
     #region Network Sync
 
+    private string GetLegoId()
+    {
+        var pv = GetComponent<PhotonView>();
+        if (pv != null) return $"v{pv.ViewID}";
+        return $"i{GetInstanceID()}";
+    }
+
+    private static LegoSnap FindById(string id)
+    {
+        foreach (var lego in allLegos)
+        {
+            if (lego.GetLegoId() == id) return lego;
+        }
+        return null;
+    }
+
     private void BroadcastSnap(LegoSnap target)
     {
         if (!PhotonNetwork.InRoom) return;
 
         snapEventCounter++;
+        string myId = GetLegoId();
+        string targetId = target.GetLegoId();
         PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable
         {
-            { "legoSnap", $"{gameObject.name}|{target.gameObject.name}|{snapEventCounter}" }
+            { "legoSnap", $"{myId}|{targetId}|{snapEventCounter}" }
         });
     }
 
@@ -238,7 +221,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         snapEventCounter++;
         PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable
         {
-            { "legoDetach", $"{gameObject.name}|{snapEventCounter}" }
+            { "legoDetach", $"{GetLegoId()}|{snapEventCounter}" }
         });
     }
 
@@ -248,14 +231,32 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         {
             string data = changedProps["legoSnap"].ToString();
             string[] parts = data.Split('|');
-            if (parts.Length >= 2 && parts[0] == gameObject.name)
+            if (parts.Length >= 2 && parts[0] == GetLegoId())
             {
-                SnapToByName(parts[1]);
+                LegoSnap target = FindById(parts[1]);
+                if (target != null)
+                {
+                    Collider bestMine = null, bestOther = null;
+                    float bestDist = float.MaxValue;
+                    foreach (Collider myCol in snapColliders)
+                    {
+                        if (myCol == null) continue;
+                        foreach (Collider otherCol in target.snapColliders)
+                        {
+                            if (otherCol == null) continue;
+                            if (!IsCompatible(myCol, otherCol)) continue;
+                            float dist = Vector3.Distance(myCol.bounds.center, otherCol.bounds.center);
+                            if (dist < bestDist) { bestDist = dist; bestMine = myCol; bestOther = otherCol; }
+                        }
+                    }
+                    if (bestMine != null && bestOther != null)
+                        SnapTo(target, bestMine, bestOther);
 
-                var ptv = GetComponent<PhotonTransformView>();
-                if (ptv != null) ptv.enabled = false;
-                var cbs = GetComponent<CargoBoxSync>();
-                if (cbs != null) cbs.enabled = false;
+                    var ptv = GetComponent<PhotonTransformView>();
+                    if (ptv != null) ptv.enabled = false;
+                    var cbs = GetComponent<CargoBoxSync>();
+                    if (cbs != null) cbs.enabled = false;
+                }
             }
         }
 
@@ -263,7 +264,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         {
             string data = changedProps["legoDetach"].ToString();
             string[] parts = data.Split('|');
-            if (parts.Length >= 1 && parts[0] == gameObject.name && HasParent)
+            if (parts.Length >= 1 && parts[0] == GetLegoId() && HasParent)
             {
                 parentLego.childLegos.Remove(this);
                 parentLego = null;
@@ -276,6 +277,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
                 rb.mass = 2f;
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
+                rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
                 var ptv = GetComponent<PhotonTransformView>();
                 if (ptv != null) ptv.enabled = true;
@@ -302,6 +304,20 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         while (current.parentLego != null)
             current = current.parentLego;
         return current;
+    }
+
+    public List<LegoSnap> GetAllConnected()
+    {
+        var result = new List<LegoSnap>();
+        GetRoot().CollectAll(result);
+        return result;
+    }
+
+    private void CollectAll(List<LegoSnap> result)
+    {
+        result.Add(this);
+        foreach (LegoSnap child in childLegos)
+            child.CollectAll(result);
     }
 
     #endregion

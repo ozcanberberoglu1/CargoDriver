@@ -294,12 +294,18 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
-            EnableBoxSyncComponents(heldRb.gameObject);
+
+            LegoSnap snap = heldRb.GetComponent<LegoSnap>();
+            bool hasChildren = snap != null && snap.GetAllConnected().Count > 1;
+
+            if (!hasChildren)
+                EnableBoxSyncComponents(heldRb.gameObject);
 
             heldRb.isKinematic = false;
             heldRb.useGravity = true;
             heldRb.linearDamping = 0f;
             heldRb.angularDamping = 0.05f;
+            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         }
         heldRb = null;
         heldPV = null;
