@@ -300,22 +300,10 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             heldRb.linearDamping = 0f;
             heldRb.angularDamping = 0.05f;
             heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-            StartCoroutine(DelayedEnableSync(heldRb.gameObject));
         }
         heldRb = null;
         heldPV = null;
         isHolding = false;
-    }
-
-    private System.Collections.IEnumerator DelayedEnableSync(GameObject box)
-    {
-        yield return new WaitForSeconds(1.5f);
-
-        if (box == null) yield break;
-
-        PhotonTransformView ptv = box.GetComponent<PhotonTransformView>();
-        if (ptv != null) ptv.enabled = true;
     }
 
     private bool TrySnapHeld()
