@@ -7,6 +7,10 @@ using UnityEngine.UI;
 
 public class MainMenuController : MonoBehaviourPunCallbacks
 {
+    [Header("Audio")]
+    [SerializeField] private AudioClip mainMenuMusic;
+    [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.5f;
+
     [Header("Panels")]
     [SerializeField] private GameObject mainMenuPanel;
     [SerializeField] private GameObject roomsPanel;
@@ -51,6 +55,15 @@ public class MainMenuController : MonoBehaviourPunCallbacks
 
     private void Start()
     {
+        if (mainMenuMusic != null)
+        {
+            AudioSource music = gameObject.AddComponent<AudioSource>();
+            music.clip = mainMenuMusic;
+            music.loop = true;
+            music.volume = musicVolume;
+            music.Play();
+        }
+
         playButton.onClick.AddListener(OnPlayClicked);
         settingsButton.onClick.AddListener(OnSettingsClicked);
         exitButton.onClick.AddListener(OnExitClicked);

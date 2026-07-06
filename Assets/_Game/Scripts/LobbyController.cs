@@ -38,6 +38,15 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [Header("Join Game")]
     [SerializeField] private Collider joinCylinderTrigger;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip lobbyMusic;
+    [SerializeField] private AudioClip[] legoSnapSounds;
+    [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.5f;
+    [SerializeField] [Range(0f, 1f)] private float sfxVolume = 1f;
+
+    private AudioSource musicSource;
+    private AudioSource sfxSource;
+
     public List<GameObject> CargoBoxes => cargoBoxes;
     public bool IsCargoCompleted => cargoCompleted;
 
@@ -56,6 +65,33 @@ public class LobbyController : MonoBehaviourPunCallbacks
     private void Awake()
     {
         FreezePickup();
+        SetupAudio();
+    }
+
+    private void SetupAudio()
+    {
+        musicSource = gameObject.AddComponent<AudioSource>();
+        musicSource.loop = true;
+        musicSource.playOnAwake = false;
+        musicSource.volume = musicVolume;
+
+        sfxSource = gameObject.AddComponent<AudioSource>();
+        sfxSource.loop = false;
+        sfxSource.playOnAwake = false;
+        sfxSource.volume = sfxVolume;
+
+        if (lobbyMusic != null)
+        {
+            musicSource.clip = lobbyMusic;
+            musicSource.Play();
+        }
+    }
+
+    public void PlayLegoSnapSound()
+    {
+        if (legoSnapSounds == null || legoSnapSounds.Length == 0) return;
+        AudioClip clip = legoSnapSounds[Random.Range(0, legoSnapSounds.Length)];
+        sfxSource.PlayOneShot(clip, sfxVolume);
     }
 
     private IEnumerator Start()

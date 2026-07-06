@@ -4958,6 +4958,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4798091533c4f4223823b1dd3f3ab519, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuController
+  mainMenuMusic: {fileID: 8300000, guid: 44d0263898bb64c319747801eec8a849, type: 3}
+  musicVolume: 0.5
   mainMenuPanel: {fileID: 929709984}
   roomsPanel: {fileID: 1284424947}
   roomsView: {fileID: 83217674}

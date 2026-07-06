@@ -104,6 +104,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
 
         SnapTo(bestTarget, bestMine, bestOther);
         BroadcastSnap(bestTarget, transform.localPosition, transform.localRotation);
+        PlaySnapSound();
         return true;
     }
 
@@ -304,6 +305,13 @@ public class LegoSnap : MonoBehaviourPunCallbacks
     }
 
     #endregion
+
+    private void PlaySnapSound()
+    {
+        LobbyController lobby = FindAnyObjectByType<LobbyController>();
+        if (lobby != null)
+            lobby.PlayLegoSnapSound();
+    }
 
     #region Helpers
 

@@ -4685,6 +4685,12 @@ MonoBehaviour:
   successDisplayTime: 4
   successFadeTime: 1
   joinCylinderTrigger: {fileID: 1927127143}
+  lobbyMusic: {fileID: 8300000, guid: 087f66bc007ed4cb0952a3063484a7e4, type: 3}
+  legoSnapSounds:
+  - {fileID: 8300000, guid: 6f80f584cd751420e8c54b55a2c8137d, type: 3}
+  - {fileID: 8300000, guid: f83b902b07389459b97b8828d932674d, type: 3}
+  musicVolume: 0.181
+  sfxVolume: 1
   pausePanel: {fileID: 3766828}
   exitRoomButton: {fileID: 587377651}
   leaveRoomButton: {fileID: 1355005808}

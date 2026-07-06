@@ -132,7 +132,10 @@ public class ToyController : MonoBehaviourPun
         if (isPaused) return;
 
         HandleCameraToggle();
-        HandleCamera();
+
+        CargoPickup cp = GetComponent<CargoPickup>();
+        if (cp == null || !cp.IsRotating)
+            HandleCamera();
 
         if (!movementLocked)
         {

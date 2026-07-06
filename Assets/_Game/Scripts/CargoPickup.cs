@@ -36,6 +36,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private float ikWeight;
     private bool isHolding;
     private float currentHoldDist;
+    public bool IsRotating => isRotating;
+    private bool isRotating;
+    private Vector3 frozenHoldPos;
 
     private Transform recentlyDropped;
     private float droppedTimer;
@@ -101,6 +104,38 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         }
         else if (isHolding)
         {
+            bool rightPressed = mouse.rightButton.isPressed;
+
+            if (rightPressed && !isRotating)
+            {
+                isRotating = true;
+                if (heldRb != null)
+                    frozenHoldPos = heldRb.transform.position;
+            }
+            else if (!rightPressed && isRotating)
+            {
+                isRotating = false;
+            }
+
+            if (isRotating && heldRb != null)
+            {
+                Vector2 delta = mouse.delta.ReadValue();
+                float rotX = delta.y * 0.5f;
+                float rotY = -delta.x * 0.5f;
+
+                Camera cam = GetComponentInChildren<Camera>();
+                if (cam != null && cam.isActiveAndEnabled)
+                {
+                    heldRb.transform.Rotate(cam.transform.up, rotY, Space.World);
+                    heldRb.transform.Rotate(cam.transform.right, rotX, Space.World);
+                }
+                else
+                {
+                    heldRb.transform.Rotate(Vector3.up, rotY, Space.World);
+                    heldRb.transform.Rotate(Vector3.right, rotX, Space.World);
+                }
+            }
+
             bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
 
             if (!isGameScene)
@@ -313,6 +348,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         heldRb = null;
         heldPV = null;
         isHolding = false;
+        isRotating = false;
     }
 
     private bool TrySnapHeld()
@@ -400,6 +436,18 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             holdPos = transform.position
                 + transform.forward * currentHoldDist
                 + Vector3.up * holdUp;
+        }
+
+        if (isRotating)
+        {
+            if (heldRb.isKinematic)
+                heldRb.transform.position = frozenHoldPos;
+            else
+            {
+                Vector3 diff = frozenHoldPos - heldRb.position;
+                heldRb.linearVelocity = diff * 12f;
+            }
+            return;
         }
 
         if (heldRb.isKinematic)
@@ -509,6 +557,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             {
                 heldRb.transform.position = Vector3.SmoothDamp(
                     heldRb.transform.position, syncHeldTargetPos, ref heldSmoothVel, 0.04f);
+                heldRb.transform.rotation = Quaternion.Slerp(
+                    heldRb.transform.rotation, syncHeldTargetRot, Time.deltaTime * 15f);
             }
         }
         else if (!syncHolding && isHolding)
