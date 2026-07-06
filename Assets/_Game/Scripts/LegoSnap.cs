@@ -45,7 +45,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
     {
         foreach (Transform child in parent)
         {
-            if (child.name == "TopCollider" || child.name == "DownCollider")
+            if (child.name.StartsWith("TopCollider") || child.name.StartsWith("DownCollider"))
             {
                 Collider col = child.GetComponent<Collider>();
                 if (col != null) list.Add(col);
@@ -109,8 +109,8 @@ public class LegoSnap : MonoBehaviourPunCallbacks
 
     private bool IsCompatible(Collider a, Collider b)
     {
-        bool aIsTop = a.transform.name == "TopCollider";
-        bool bIsTop = b.transform.name == "TopCollider";
+        bool aIsTop = a.transform.name.StartsWith("TopCollider");
+        bool bIsTop = b.transform.name.StartsWith("TopCollider");
         return aIsTop != bIsTop;
     }
 
@@ -118,7 +118,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
     {
         Vector3 offset = targetCol.bounds.center - myCol.bounds.center;
 
-        bool myIsDown = myCol.transform.name == "DownCollider";
+        bool myIsDown = myCol.transform.name.StartsWith("DownCollider");
         if (myIsDown)
             offset.y += snapDepth;
         else

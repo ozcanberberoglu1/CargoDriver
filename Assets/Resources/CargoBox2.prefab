@@ -410,5 +410,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d29e58595dcf44dfa0ba8779b916884, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LegoSnap
-  snapDistance: 0.15
-  snapDepth: 0.05
+  snapDistance: 0.3
+  snapDepth: -0.1
