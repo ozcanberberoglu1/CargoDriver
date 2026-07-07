@@ -15,6 +15,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
     private LegoSnap parentLego;
     private readonly List<LegoSnap> childLegos = new();
     private Collider[] snapColliders;
+    private static readonly HashSet<Collider> usedColliders = new();
 
     private void Awake()
     {
@@ -77,15 +78,16 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         foreach (Collider myCol in snapColliders)
         {
             if (myCol == null) continue;
+            if (usedColliders.Contains(myCol)) continue;
 
             foreach (LegoSnap other in allLegos)
             {
                 if (other == this) continue;
-                if (IsInSameGroup(other)) continue;
 
                 foreach (Collider otherCol in other.snapColliders)
                 {
                     if (otherCol == null) continue;
+                    if (usedColliders.Contains(otherCol)) continue;
                     if (!IsCompatible(myCol, otherCol)) continue;
 
                     float dist = Vector3.Distance(myCol.bounds.center, otherCol.bounds.center);
@@ -102,10 +104,66 @@ public class LegoSnap : MonoBehaviourPunCallbacks
 
         if (bestTarget == null) return false;
 
-        SnapTo(bestTarget, bestMine, bestOther);
-        BroadcastSnap(bestTarget, transform.localPosition, transform.localRotation);
+        if (IsInSameGroup(bestTarget))
+        {
+            usedColliders.Add(bestMine);
+            usedColliders.Add(bestOther);
+            PlaySnapSound();
+            return true;
+        }
+
+        LegoSnap snapChild;
+        LegoSnap snapParent;
+        Collider childCol, parentCol;
+
+        if (HasParent)
+        {
+            snapChild = bestTarget.GetRoot();
+            snapParent = this;
+            childCol = bestOther;
+            parentCol = bestMine;
+        }
+        else
+        {
+            snapChild = GetRoot();
+            snapParent = bestTarget;
+            childCol = bestMine;
+            parentCol = bestOther;
+        }
+
+        Vector3 offset = parentCol.bounds.center - childCol.bounds.center;
+        bool childIsDown = childCol.transform.name.StartsWith("DownCollider");
+        if (childIsDown)
+            offset.y += snapDepth;
+        else
+            offset.y -= snapDepth;
+
+        snapChild.transform.position += offset;
+
+        snapChild.parentLego = snapParent;
+        snapParent.childLegos.Add(snapChild);
+
+        usedColliders.Add(bestMine);
+        usedColliders.Add(bestOther);
+
+        Rigidbody rb = snapChild.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            Destroy(rb);
+        }
+
+        snapChild.transform.SetParent(snapParent.transform, true);
+
+        snapChild.BroadcastSnap(snapParent, snapChild.transform.localPosition, snapChild.transform.localRotation);
         PlaySnapSound();
         return true;
+    }
+
+    private bool SnapSimple_Unused(LegoSnap bestTarget, Collider bestMine, Collider bestOther)
+    {
+        return false;
     }
 
     private bool IsCompatible(Collider a, Collider b)
@@ -115,7 +173,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         return aIsTop != bIsTop;
     }
 
-    private void SnapTo(LegoSnap target, Collider myCol, Collider targetCol)
+    public void SnapTo(LegoSnap target, Collider myCol, Collider targetCol)
     {
         Vector3 offset = targetCol.bounds.center - myCol.bounds.center;
 
@@ -129,6 +187,9 @@ public class LegoSnap : MonoBehaviourPunCallbacks
 
         parentLego = target;
         target.childLegos.Add(this);
+
+        usedColliders.Add(myCol);
+        usedColliders.Add(targetCol);
 
         Rigidbody rb = GetComponent<Rigidbody>();
         if (rb != null)
@@ -150,6 +211,18 @@ public class LegoSnap : MonoBehaviourPunCallbacks
     public void DetachFromParent()
     {
         if (parentLego == null) return;
+
+        foreach (Collider col in snapColliders)
+        {
+            if (col != null) usedColliders.Remove(col);
+        }
+        if (parentLego != null)
+        {
+            foreach (Collider col in parentLego.snapColliders)
+            {
+                if (col != null) usedColliders.Remove(col);
+            }
+        }
 
         parentLego.childLegos.Remove(this);
         parentLego = null;
@@ -204,7 +277,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         return null;
     }
 
-    private void BroadcastSnap(LegoSnap target, Vector3 localPos, Quaternion localRot)
+    public void BroadcastSnap(LegoSnap target, Vector3 localPos, Quaternion localRot)
     {
         if (!PhotonNetwork.InRoom) return;
 
@@ -244,6 +317,8 @@ public class LegoSnap : MonoBehaviourPunCallbacks
                 {
                     parentLego = target;
                     target.childLegos.Add(this);
+
+                    MarkClosestCollidersUsed(target);
 
                     Rigidbody rb = GetComponent<Rigidbody>();
                     if (rb != null)
@@ -305,6 +380,32 @@ public class LegoSnap : MonoBehaviourPunCallbacks
     }
 
     #endregion
+
+    private void MarkClosestCollidersUsed(LegoSnap target)
+    {
+        float bestDist = float.MaxValue;
+        Collider bestMine = null, bestOther = null;
+
+        foreach (Collider myCol in snapColliders)
+        {
+            if (myCol == null) continue;
+            foreach (Collider otherCol in target.snapColliders)
+            {
+                if (otherCol == null) continue;
+                if (!IsCompatible(myCol, otherCol)) continue;
+                float dist = Vector3.Distance(myCol.bounds.center, otherCol.bounds.center);
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestMine = myCol;
+                    bestOther = otherCol;
+                }
+            }
+        }
+
+        if (bestMine != null) usedColliders.Add(bestMine);
+        if (bestOther != null) usedColliders.Add(bestOther);
+    }
 
     private void PlaySnapSound()
     {

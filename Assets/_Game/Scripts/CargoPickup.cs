@@ -38,6 +38,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private float currentHoldDist;
     public bool IsRotating => isRotating;
     private bool isRotating;
+    private float snapCooldown;
     private Vector3 frozenHoldPos;
 
     private Transform recentlyDropped;
@@ -72,6 +73,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         if (droppedTimer > 0f)
             droppedTimer -= Time.deltaTime;
+        if (snapCooldown > 0f)
+            snapCooldown -= Time.deltaTime;
 
         ToyController tc = GetComponent<ToyController>();
         if (tc != null && tc.IsPaused) return;
@@ -81,7 +84,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         bool pressing = mouse.leftButton.isPressed;
 
-        if (!isHolding && pressing)
+        if (!isHolding && pressing && snapCooldown <= 0f)
         {
             bool fps = tc != null && tc.IsFPS;
 
@@ -356,13 +359,28 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (heldRb == null) return false;
         LegoSnap snap = heldRb.GetComponent<LegoSnap>();
         if (snap == null) return false;
-        if (!snap.TrySnap()) return false;
 
-        heldByPickup.Remove(heldRb.transform);
-        DisableBoxSyncComponents(heldRb.gameObject);
+        bool snapped = false;
+        var group = snap.GetAllConnected();
+        foreach (var member in group)
+        {
+            if (member.TrySnap())
+            {
+                snapped = true;
+                break;
+            }
+        }
+
+        if (!snapped) return false;
+
+        if (heldRb != null)
+            heldByPickup.Remove(heldRb.transform);
+
         heldRb = null;
         heldPV = null;
         isHolding = false;
+        isRotating = false;
+        snapCooldown = 1f;
         return true;
     }
 
