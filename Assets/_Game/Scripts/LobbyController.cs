@@ -57,6 +57,8 @@ public class LobbyController : MonoBehaviourPunCallbacks
     [SerializeField] private Button backButton;
     [SerializeField] private Slider mouseSensitivitySlider;
     [SerializeField] private Slider mouseWheelSensitivitySlider;
+    [SerializeField] private Slider musicsSlider;
+    [SerializeField] private Slider soundsSlider;
 
     private readonly Dictionary<int, GameObject> playerListEntries = new();
     private bool cargoCompleted;
@@ -226,8 +228,42 @@ public class LobbyController : MonoBehaviourPunCallbacks
             mouseWheelSensitivitySlider.onValueChanged.AddListener(OnMouseWheelSensitivityChanged);
         }
 
+        if (musicsSlider != null)
+        {
+            musicsSlider.minValue = 0f;
+            musicsSlider.maxValue = 1f;
+            musicsSlider.value = musicVolume;
+            musicsSlider.onValueChanged.AddListener(OnMusicVolumeChanged);
+        }
+
+        if (soundsSlider != null)
+        {
+            soundsSlider.minValue = 0f;
+            soundsSlider.maxValue = 1f;
+            soundsSlider.value = sfxVolume;
+            soundsSlider.onValueChanged.AddListener(OnSoundsVolumeChanged);
+        }
+
         if (backButton != null)
             backButton.onClick.AddListener(() => { if (pauseOpen) TogglePause(); });
+    }
+
+    private void OnMusicVolumeChanged(float value)
+    {
+        musicVolume = value;
+        if (musicSource != null)
+            musicSource.volume = value;
+    }
+
+    private void OnSoundsVolumeChanged(float value)
+    {
+        sfxVolume = value;
+        if (sfxSource != null)
+            sfxSource.volume = value;
+
+        RadioController radio = FindAnyObjectByType<RadioController>();
+        if (radio != null)
+            radio.SetVolume(value);
     }
 
     public void TogglePause()
