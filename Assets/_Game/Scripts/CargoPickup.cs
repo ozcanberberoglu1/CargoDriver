@@ -78,17 +78,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             if (droppedTimer <= 0f && recentlyDropped != null)
             {
                 recentlyDroppedSet.Remove(recentlyDropped);
-
-                if (!PhotonNetwork.IsMasterClient)
-                {
-                    Rigidbody droppedRb = recentlyDropped.GetComponent<Rigidbody>();
-                    if (droppedRb != null)
-                    {
-                        droppedRb.isKinematic = true;
-                        droppedRb.useGravity = false;
-                    }
-                }
-
                 recentlyDropped = null;
             }
         }
@@ -362,41 +351,26 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
             recentlyDropped = heldRb.transform;
             recentlyDroppedSet.Add(heldRb.transform);
-            droppedTimer = isGameScene ? 0.5f : 3f;
-
-            heldRb.isKinematic = false;
-            heldRb.useGravity = true;
-            heldRb.linearDamping = 0f;
-            heldRb.angularDamping = 0.05f;
-            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            droppedTimer = isGameScene ? 0.3f : 3f;
 
             if (isGameScene && !PhotonNetwork.IsMasterClient)
-                StartCoroutine(SettleAndFreeze(heldRb));
+            {
+                heldRb.isKinematic = true;
+                heldRb.useGravity = false;
+            }
+            else
+            {
+                heldRb.isKinematic = false;
+                heldRb.useGravity = true;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0.05f;
+                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            }
         }
         heldRb = null;
         heldPV = null;
         isHolding = false;
         isRotating = false;
-    }
-
-    private System.Collections.IEnumerator SettleAndFreeze(Rigidbody rb)
-    {
-        float timeout = 2f;
-        float elapsed = 0f;
-
-        while (rb != null && elapsed < timeout)
-        {
-            elapsed += Time.deltaTime;
-            if (rb.linearVelocity.magnitude < 0.1f && elapsed > 0.3f)
-                break;
-            yield return null;
-        }
-
-        if (rb != null)
-        {
-            rb.isKinematic = true;
-            rb.useGravity = false;
-        }
     }
 
     private bool TrySnapHeld()
