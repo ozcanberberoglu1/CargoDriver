@@ -570,6 +570,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
                     if (heldRb != null)
                     {
+                        heldRb.transform.SetParent(null, true);
                         heldRb.isKinematic = true;
                         heldRb.useGravity = false;
                         heldRb.linearDamping = 0f;
