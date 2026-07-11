@@ -424,8 +424,16 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             rb.mass = 2f;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-            rb.isKinematic = false;
-            rb.useGravity = true;
+            if (PhotonNetwork.IsMasterClient)
+            {
+                rb.isKinematic = false;
+                rb.useGravity = true;
+            }
+            else
+            {
+                rb.isKinematic = true;
+                rb.useGravity = false;
+            }
 
             if (box.GetComponent<CargoAutoParent>() == null)
                 box.AddComponent<CargoAutoParent>();

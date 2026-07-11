@@ -44,6 +44,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private Transform recentlyDropped;
     private float droppedTimer;
+    public Transform recentlyDroppedTransform => droppedTimer > 0f ? recentlyDropped : null;
 
     private bool syncHolding;
     private int syncHeldId = -1;
@@ -350,11 +351,19 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             recentlyDropped = heldRb.transform;
             droppedTimer = 3f;
 
-            heldRb.isKinematic = false;
-            heldRb.useGravity = true;
-            heldRb.linearDamping = 0f;
-            heldRb.angularDamping = 0.05f;
-            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            if (isGameScene && !PhotonNetwork.IsMasterClient)
+            {
+                heldRb.isKinematic = true;
+                heldRb.useGravity = false;
+            }
+            else
+            {
+                heldRb.isKinematic = false;
+                heldRb.useGravity = true;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0.05f;
+                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            }
         }
         heldRb = null;
         heldPV = null;

@@ -84,7 +84,16 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
-        
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            foreach (var t in cargoBoxTransforms)
+            {
+                if (t == null) continue;
+                LegoSnap snap = t.GetComponent<LegoSnap>();
+                if (snap != null && snap.HasParent) continue;
+                t.SetParent(null, true);
+            }
+        }
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -145,7 +154,27 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             wheelMeshes[i].rotation = transform.rotation * steer * spin;
         }
 
-        
+        if (!PhotonNetwork.IsMasterClient && cargoBoxTransforms != null && cargoTargetPos != null)
+        {
+            int count = Mathf.Min(cargoBoxTransforms.Length, cargoTargetPos.Length);
+            for (int i = 0; i < count; i++)
+            {
+                if (cargoBoxTransforms[i] == null) continue;
+                if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
+                if (droppedTrackingActive(cargoBoxTransforms[i])) continue;
+                cargoBoxTransforms[i].position = cargoTargetPos[i];
+                cargoBoxTransforms[i].rotation = cargoTargetRot[i];
+            }
+        }
+    }
+
+    private bool droppedTrackingActive(Transform t)
+    {
+        foreach (var pickup in FindObjectsByType<CargoPickup>(FindObjectsSortMode.None))
+        {
+            if (pickup.recentlyDroppedTransform == t) return true;
+        }
+        return false;
     }
 
     #region Input
