@@ -159,6 +159,7 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             {
                 if (cargoBoxTransforms[i] == null) continue;
                 if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
+                if (CargoPickup.recentlyDroppedSet.Contains(cargoBoxTransforms[i])) continue;
                 LegoSnap legoSnap = cargoBoxTransforms[i].GetComponent<LegoSnap>();
                 if (legoSnap != null && legoSnap.HasParent) continue;
                 if (cargoBoxTransforms[i].GetComponent<Rigidbody>() == null) continue;

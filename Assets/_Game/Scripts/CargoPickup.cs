@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 public class CargoPickup : MonoBehaviourPun, IPunObservable
 {
     public static readonly System.Collections.Generic.HashSet<Transform> heldByPickup = new();
+    public static readonly System.Collections.Generic.HashSet<Transform> recentlyDroppedSet = new();
     [Header("Grab")]
     [SerializeField] public float detectRange = 5f;
     [SerializeField] public float grabDistance = 1.5f;
@@ -72,7 +73,14 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         }
 
         if (droppedTimer > 0f)
+        {
             droppedTimer -= Time.deltaTime;
+            if (droppedTimer <= 0f && recentlyDropped != null)
+            {
+                recentlyDroppedSet.Remove(recentlyDropped);
+                recentlyDropped = null;
+            }
+        }
         if (snapCooldown > 0f)
             snapCooldown -= Time.deltaTime;
 
@@ -340,6 +348,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             heldByPickup.Remove(heldRb.transform);
 
             recentlyDropped = heldRb.transform;
+            recentlyDroppedSet.Add(heldRb.transform);
             droppedTimer = 3f;
 
             heldRb.isKinematic = false;
