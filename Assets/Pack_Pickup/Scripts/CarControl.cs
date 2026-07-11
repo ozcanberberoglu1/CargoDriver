@@ -89,6 +89,8 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             foreach (var t in cargoBoxTransforms)
             {
                 if (t == null) continue;
+                LegoSnap snap = t.GetComponent<LegoSnap>();
+                if (snap != null && snap.HasParent) continue;
                 t.SetParent(null, true);
             }
         }
