@@ -255,16 +255,18 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (rb != null)
             rb.isKinematic = false;
 
-        // Runs on master only. Boxes are free physics objects (not parented to
-        // the car), so re-enable them by tag. Master is the physics authority.
-        foreach (var go in GameObject.FindGameObjectsWithTag("CargoBox"))
+        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
+        if (cargoParent == null) yield break;
+
+        foreach (Transform child in cargoParent)
         {
-            Rigidbody boxRb = go.GetComponent<Rigidbody>();
-            if (boxRb == null) continue;
-            boxRb.isKinematic = false;
-            boxRb.useGravity = true;
-            boxRb.linearVelocity = Vector3.zero;
-            boxRb.angularVelocity = Vector3.zero;
+            if (!child.name.StartsWith("CargoBox")) continue;
+            Rigidbody boxRb = child.GetComponent<Rigidbody>();
+            if (boxRb != null)
+            {
+                boxRb.isKinematic = false;
+                boxRb.useGravity = true;
+            }
         }
 
         isDead = false;
@@ -374,6 +376,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         string data = props["cargoData"].ToString();
         string[] parts = data.Split(';');
 
+        Transform cargoParent = pickup.transform.Find("CargoBoxes");
+
         var spawnedBoxes = new List<GameObject>();
         var parentIndices = new List<int>();
 
@@ -408,9 +412,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             box.name = $"CargoBox_{i}";
             box.tag = "CargoBox";
 
-            // NOT parented to the car. Boxes are free physics objects.
-            // On master they rest on the car bed via physics (slosh, fall off).
-            // On non-master they are kinematic and mirror the master's positions.
+            if (cargoParent != null)
+                box.transform.SetParent(cargoParent, true);
 
             Rigidbody rb = box.GetComponent<Rigidbody>();
             if (rb == null) rb = box.AddComponent<Rigidbody>();
@@ -419,7 +422,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (col == null) box.AddComponent<BoxCollider>();
 
             rb.mass = 2f;
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
             if (PhotonNetwork.IsMasterClient)
@@ -432,6 +434,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 rb.isKinematic = true;
                 rb.useGravity = false;
             }
+
+            if (box.GetComponent<CargoAutoParent>() == null)
+                box.AddComponent<CargoAutoParent>();
 
             spawnedBoxes.Add(box);
             parentIndices.Add(parentIdx);
