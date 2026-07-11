@@ -84,16 +84,7 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            foreach (var t in cargoBoxTransforms)
-            {
-                if (t == null) continue;
-                LegoSnap snap = t.GetComponent<LegoSnap>();
-                if (snap != null && snap.HasParent) continue;
-                t.SetParent(null, true);
-            }
-        }
+        
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -154,23 +145,7 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             wheelMeshes[i].rotation = transform.rotation * steer * spin;
         }
 
-        if (cargoBoxTransforms != null && cargoTargetPos != null)
-        {
-            int count = Mathf.Min(cargoBoxTransforms.Length, cargoTargetPos.Length);
-            for (int i = 0; i < count; i++)
-            {
-                if (cargoBoxTransforms[i] == null) continue;
-                if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
-                if (CargoPickup.recentlyDroppedSet.Contains(cargoBoxTransforms[i])) continue;
-                LegoSnap legoSnap = cargoBoxTransforms[i].GetComponent<LegoSnap>();
-                if (legoSnap != null && legoSnap.HasParent) continue;
-                if (cargoBoxTransforms[i].GetComponent<Rigidbody>() == null) continue;
-                cargoBoxTransforms[i].position = Vector3.SmoothDamp(
-                    cargoBoxTransforms[i].position, cargoTargetPos[i], ref cargoSmoothVel[i], smooth);
-                cargoBoxTransforms[i].rotation = Quaternion.Slerp(
-                    cargoBoxTransforms[i].rotation, cargoTargetRot[i], Time.deltaTime * 25f);
-            }
-        }
+        
     }
 
     #region Input

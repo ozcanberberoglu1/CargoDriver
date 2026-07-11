@@ -76,10 +76,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             droppedTimer -= Time.deltaTime;
             if (droppedTimer <= 0f && recentlyDropped != null)
-            {
-                recentlyDroppedSet.Remove(recentlyDropped);
                 recentlyDropped = null;
-            }
         }
         if (snapCooldown > 0f)
             snapCooldown -= Time.deltaTime;
@@ -350,22 +347,13 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
 
             recentlyDropped = heldRb.transform;
-            recentlyDroppedSet.Add(heldRb.transform);
-            droppedTimer = isGameScene ? 0.3f : 3f;
+            droppedTimer = 3f;
 
-            if (isGameScene && !PhotonNetwork.IsMasterClient)
-            {
-                heldRb.isKinematic = true;
-                heldRb.useGravity = false;
-            }
-            else
-            {
-                heldRb.isKinematic = false;
-                heldRb.useGravity = true;
-                heldRb.linearDamping = 0f;
-                heldRb.angularDamping = 0.05f;
-                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-            }
+            heldRb.isKinematic = false;
+            heldRb.useGravity = true;
+            heldRb.linearDamping = 0f;
+            heldRb.angularDamping = 0.05f;
+            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         }
         heldRb = null;
         heldPV = null;

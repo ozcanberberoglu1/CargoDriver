@@ -424,16 +424,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             rb.mass = 2f;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-            if (PhotonNetwork.IsMasterClient)
-            {
-                rb.isKinematic = false;
-                rb.useGravity = true;
-            }
-            else
-            {
-                rb.isKinematic = true;
-                rb.useGravity = false;
-            }
+            rb.isKinematic = false;
+            rb.useGravity = true;
 
             spawnedBoxes.Add(box);
             parentIndices.Add(parentIdx);
