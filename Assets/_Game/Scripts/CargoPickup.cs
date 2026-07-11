@@ -78,6 +78,17 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             if (droppedTimer <= 0f && recentlyDropped != null)
             {
                 recentlyDroppedSet.Remove(recentlyDropped);
+
+                if (!PhotonNetwork.IsMasterClient)
+                {
+                    Rigidbody droppedRb = recentlyDropped.GetComponent<Rigidbody>();
+                    if (droppedRb != null)
+                    {
+                        droppedRb.isKinematic = true;
+                        droppedRb.useGravity = false;
+                    }
+                }
+
                 recentlyDropped = null;
             }
         }
@@ -347,15 +358,25 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
 
+            bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
+
             recentlyDropped = heldRb.transform;
             recentlyDroppedSet.Add(heldRb.transform);
-            droppedTimer = 3f;
+            droppedTimer = isGameScene ? 0.5f : 3f;
 
-            heldRb.isKinematic = false;
-            heldRb.useGravity = true;
-            heldRb.linearDamping = 0f;
-            heldRb.angularDamping = 0.05f;
-            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            if (isGameScene && !PhotonNetwork.IsMasterClient)
+            {
+                heldRb.isKinematic = true;
+                heldRb.useGravity = false;
+            }
+            else
+            {
+                heldRb.isKinematic = false;
+                heldRb.useGravity = true;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0.05f;
+                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            }
         }
         heldRb = null;
         heldPV = null;
