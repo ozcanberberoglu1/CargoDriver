@@ -427,6 +427,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             rb.isKinematic = false;
             rb.useGravity = true;
 
+            if (box.GetComponent<CargoAutoParent>() == null)
+                box.AddComponent<CargoAutoParent>();
+
             spawnedBoxes.Add(box);
             parentIndices.Add(parentIdx);
         }

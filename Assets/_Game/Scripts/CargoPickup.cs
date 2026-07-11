@@ -310,6 +310,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         }
 
         heldByPickup.Add(heldRb.transform);
+        heldRb.transform.SetParent(null, true);
 
         DisableBoxSyncComponents(heldRb.gameObject);
 
