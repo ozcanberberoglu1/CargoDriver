@@ -149,8 +149,11 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         Rigidbody rb = snapChild.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
+            if (!rb.isKinematic)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
             Destroy(rb);
         }
 
@@ -194,8 +197,11 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         Rigidbody rb = GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
+            if (!rb.isKinematic)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
             Destroy(rb);
         }
 
@@ -323,8 +329,11 @@ public class LegoSnap : MonoBehaviourPunCallbacks
                     Rigidbody rb = GetComponent<Rigidbody>();
                     if (rb != null)
                     {
-                        rb.linearVelocity = Vector3.zero;
-                        rb.angularVelocity = Vector3.zero;
+                        if (!rb.isKinematic)
+                        {
+                            rb.linearVelocity = Vector3.zero;
+                            rb.angularVelocity = Vector3.zero;
+                        }
                         Destroy(rb);
                     }
 

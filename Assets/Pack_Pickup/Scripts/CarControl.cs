@@ -31,8 +31,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private Vector3[] cargoSmoothVel;
     private float wheelSpin;
 
-    private Vector3 prevVelocity;
-    private Vector3[] boxSlideVel;
+    private GameObject cargoBedProxy;
+    private Rigidbody cargoBedProxyRb;
+    private Collider[] cargoBedColliders;
 
     private const byte INPUT_EVENT = 42;
     private readonly Dictionary<int, float[]> remoteInputs = new();
@@ -68,18 +69,39 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
     private System.Collections.IEnumerator FindCargoBoxes()
     {
-        yield return new WaitForSeconds(3f);
-
         var list = new List<Transform>();
-        foreach (Transform child in transform)
-            FindCargoRecursive(child, list);
+        int expectedCount = 1;
+        if (PhotonNetwork.InRoom &&
+            PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue("cargoData", out object cargoData))
+        {
+            expectedCount = Mathf.Max(1, cargoData.ToString().Split(';').Length - 1);
+        }
+
+        float timeout = 10f;
+        while (timeout > 0f)
+        {
+            list.Clear();
+            foreach (Transform child in transform)
+                FindCargoRecursive(child, list);
+
+            if (list.Count >= expectedCount)
+                break;
+
+            timeout -= 0.1f;
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        if (list.Count == 0)
+        {
+            Debug.LogError("[CarControl] Cargo boxes could not be initialized.");
+            yield break;
+        }
 
         cargoBoxTransforms = list.ToArray();
         int n = cargoBoxTransforms.Length;
         cargoTargetPos = new Vector3[n];
         cargoTargetRot = new Quaternion[n];
         cargoSmoothVel = new Vector3[n];
-        boxSlideVel = new Vector3[n];
 
         for (int i = 0; i < n; i++)
         {
@@ -88,48 +110,125 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
-        Collider[] truckBodyColliders = GetComponents<Collider>();
-        Transform cbChild = transform.Find("CargoBoxes");
-        Collider cbTrigger = cbChild != null ? cbChild.GetComponent<Collider>() : null;
+        CreateCargoBedProxy();
 
         foreach (var t in cargoBoxTransforms)
         {
             if (t == null) continue;
-            foreach (Collider boxCol in t.GetComponentsInChildren<Collider>())
-            {
-                foreach (Collider tc in truckBodyColliders)
-                    Physics.IgnoreCollision(boxCol, tc, true);
-                if (cbTrigger != null)
-                    Physics.IgnoreCollision(boxCol, cbTrigger, true);
-            }
+            LegoSnap snap = t.GetComponent<LegoSnap>();
+            if (snap != null && snap.HasParent) continue;
+            ConfigureCargoAuthority(t);
         }
+    }
 
-        prevVelocity = rb != null ? rb.linearVelocity : Vector3.zero;
+    private void CreateCargoBedProxy()
+    {
+        if (cargoBedProxy != null) return;
 
-        if (!PhotonNetwork.IsMasterClient)
+        cargoBedProxy = new GameObject("CargoBedPhysicsProxy");
+        cargoBedProxy.transform.SetPositionAndRotation(transform.position, transform.rotation);
+
+        cargoBedProxyRb = cargoBedProxy.AddComponent<Rigidbody>();
+        cargoBedProxyRb.isKinematic = true;
+        cargoBedProxyRb.useGravity = false;
+        cargoBedProxyRb.interpolation = RigidbodyInterpolation.Interpolate;
+        cargoBedProxyRb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+
+        PhysicsMaterial bedMaterial = new PhysicsMaterial("CargoBedFriction")
         {
-            foreach (var t in cargoBoxTransforms)
+            staticFriction = 0.8f,
+            dynamicFriction = 0.55f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Maximum,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+
+        var colliders = new List<Collider>
+        {
+            AddProxyCollider(new Vector3(0f, 1.55f, -3.25f), new Vector3(3.8f, 0.5f, 4.6f), bedMaterial),
+            AddProxyCollider(new Vector3(-1.95f, 2.35f, -3.25f), new Vector3(0.25f, 1.8f, 4.6f), bedMaterial),
+            AddProxyCollider(new Vector3(1.95f, 2.35f, -3.25f), new Vector3(0.25f, 1.8f, 4.6f), bedMaterial),
+            AddProxyCollider(new Vector3(0f, 2.35f, -0.95f), new Vector3(3.8f, 1.8f, 0.25f), bedMaterial),
+            AddProxyCollider(new Vector3(0f, 2.35f, -5.55f), new Vector3(3.8f, 1.8f, 0.25f), bedMaterial)
+        };
+        cargoBedColliders = colliders.ToArray();
+
+        Collider[] truckColliders = GetComponentsInChildren<Collider>(true);
+        foreach (Collider bedCollider in cargoBedColliders)
+        {
+            foreach (Collider truckCollider in truckColliders)
             {
-                if (t == null) continue;
-                LegoSnap snap = t.GetComponent<LegoSnap>();
-                if (snap != null && snap.HasParent) continue;
-                t.SetParent(null, true);
+                if (truckCollider != null && truckCollider != bedCollider)
+                    Physics.IgnoreCollision(bedCollider, truckCollider, true);
             }
         }
     }
 
-    public void ReparentBoxToTruck(Transform box)
+    private BoxCollider AddProxyCollider(
+        Vector3 center, Vector3 size, PhysicsMaterial material)
+    {
+        BoxCollider collider = cargoBedProxy.AddComponent<BoxCollider>();
+        collider.center = center;
+        collider.size = size;
+        collider.material = material;
+        return collider;
+    }
+
+    private void ConfigureCargoAuthority(Transform box)
     {
         if (box == null) return;
-        Transform cargoParent = transform.Find("CargoBoxes");
-        box.SetParent(cargoParent != null ? cargoParent : transform, true);
+        box.SetParent(null, true);
+        IgnorePhysicalTruckCollisions(box);
 
         Rigidbody boxRb = box.GetComponent<Rigidbody>();
         if (boxRb != null)
         {
-            boxRb.isKinematic = true;
-            boxRb.useGravity = false;
+            bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
+            boxRb.isKinematic = !simulate;
+            boxRb.useGravity = simulate;
+            boxRb.collisionDetectionMode = simulate
+                ? CollisionDetectionMode.ContinuousDynamic
+                : CollisionDetectionMode.Discrete;
+            boxRb.interpolation = RigidbodyInterpolation.Interpolate;
+
+            foreach (Collider collider in box.GetComponentsInChildren<Collider>(true))
+            {
+                if (!collider.isTrigger)
+                    collider.material = cargoBedColliders?[0].material;
+            }
         }
+    }
+
+    private void IgnorePhysicalTruckCollisions(Transform box)
+    {
+        Collider[] truckColliders = GetComponentsInChildren<Collider>(true);
+        foreach (Collider boxCollider in box.GetComponentsInChildren<Collider>(true))
+        {
+            foreach (Collider truckCollider in truckColliders)
+            {
+                if (truckCollider == null) continue;
+                if (truckCollider.transform.CompareTag("CargoBox")) continue;
+                if (truckCollider.GetComponentInParent<LegoSnap>() != null) continue;
+                Physics.IgnoreCollision(boxCollider, truckCollider, true);
+            }
+        }
+    }
+
+    public void ReleaseCargoToBed(Transform box)
+    {
+        if (box == null) return;
+        box.SetParent(null, true);
+        IgnorePhysicalTruckCollisions(box);
+
+        Rigidbody boxRb = box.GetComponent<Rigidbody>();
+        if (boxRb == null) return;
+
+        bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
+        boxRb.isKinematic = !simulate;
+        boxRb.useGravity = simulate;
+        boxRb.collisionDetectionMode = simulate
+            ? CollisionDetectionMode.ContinuousDynamic
+            : CollisionDetectionMode.Discrete;
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -161,8 +260,6 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         if (cargoBoxTransforms != null)
         {
-            Transform cargoParent = transform.Find("CargoBoxes");
-
             foreach (Transform box in cargoBoxTransforms)
             {
                 if (box == null) continue;
@@ -171,17 +268,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 LegoSnap snap = box.GetComponent<LegoSnap>();
                 if (snap != null && snap.HasParent) continue;
 
-                box.SetParent(cargoParent != null ? cargoParent : transform, true);
-
-                Rigidbody boxRb = box.GetComponent<Rigidbody>();
-                if (boxRb != null)
-                {
-                    boxRb.isKinematic = true;
-                    boxRb.useGravity = false;
-                }
+                ConfigureCargoAuthority(box);
             }
-
-            boxSlideVel = new Vector3[cargoBoxTransforms.Length];
         }
 
         remoteInputs.Clear();
@@ -209,14 +297,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 LegoSnap snap = box.GetComponent<LegoSnap>();
                 if (snap != null && snap.HasParent) continue;
 
-                box.SetParent(null, true);
-
-                Rigidbody boxRb = box.GetComponent<Rigidbody>();
-                if (boxRb != null)
-                {
-                    boxRb.isKinematic = true;
-                    boxRb.useGravity = false;
-                }
+                ConfigureCargoAuthority(box);
             }
         }
     }
@@ -228,7 +309,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
-            UpdateCargoInertia();
+            UpdateCargoBedProxy();
             return;
         }
 
@@ -240,80 +321,21 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             bool brake = false;
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
-            UpdateCargoInertia();
         }
+        UpdateCargoBedProxy();
     }
 
-    private void UpdateCargoInertia()
+    private void UpdateCargoBedProxy()
     {
-        if (cargoBoxTransforms == null || cargoBoxTransforms.Length == 0) return;
-        if (boxSlideVel == null || boxSlideVel.Length != cargoBoxTransforms.Length)
-            boxSlideVel = new Vector3[cargoBoxTransforms.Length];
+        if (cargoBedProxyRb == null || rb == null) return;
+        cargoBedProxyRb.MovePosition(rb.position);
+        cargoBedProxyRb.MoveRotation(rb.rotation);
+    }
 
-        Vector3 accel = (rb.linearVelocity - prevVelocity) / Time.fixedDeltaTime;
-        prevVelocity = rb.linearVelocity;
-
-        Vector3 localAccel = transform.InverseTransformDirection(-accel);
-        localAccel.y = 0f;
-
-        float inertiaScale = 0.08f;
-        float friction = 4f;
-        float bedMinX = -1.6f, bedMaxX = 1.6f;
-        float bedMinZ = -5.0f, bedMaxZ = -0.8f;
-        float boxRadius = 0.45f;
-
-        for (int i = 0; i < cargoBoxTransforms.Length; i++)
-        {
-            if (cargoBoxTransforms[i] == null) continue;
-            if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.heldByPickup)) continue;
-
-            LegoSnap snap = cargoBoxTransforms[i].GetComponent<LegoSnap>();
-            if (snap != null && snap.HasParent) continue;
-
-            boxSlideVel[i] += localAccel * inertiaScale * Time.fixedDeltaTime;
-            boxSlideVel[i] = Vector3.MoveTowards(boxSlideVel[i], Vector3.zero, friction * Time.fixedDeltaTime);
-
-            Vector3 lp = cargoBoxTransforms[i].localPosition;
-            lp.x += boxSlideVel[i].x;
-            lp.z += boxSlideVel[i].z;
-
-            if (lp.x < bedMinX) { lp.x = bedMinX; boxSlideVel[i].x *= -0.3f; }
-            if (lp.x > bedMaxX) { lp.x = bedMaxX; boxSlideVel[i].x *= -0.3f; }
-            if (lp.z < bedMinZ) { lp.z = bedMinZ; boxSlideVel[i].z *= -0.3f; }
-            if (lp.z > bedMaxZ) { lp.z = bedMaxZ; boxSlideVel[i].z *= -0.3f; }
-
-            cargoBoxTransforms[i].localPosition = lp;
-        }
-
-        for (int i = 0; i < cargoBoxTransforms.Length; i++)
-        {
-            if (cargoBoxTransforms[i] == null) continue;
-            if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.heldByPickup)) continue;
-            LegoSnap si = cargoBoxTransforms[i].GetComponent<LegoSnap>();
-            if (si != null && si.HasParent) continue;
-
-            for (int j = i + 1; j < cargoBoxTransforms.Length; j++)
-            {
-                if (cargoBoxTransforms[j] == null) continue;
-                if (IsInSetOrChildOf(cargoBoxTransforms[j], CargoPickup.heldByPickup)) continue;
-                LegoSnap sj = cargoBoxTransforms[j].GetComponent<LegoSnap>();
-                if (sj != null && sj.HasParent) continue;
-
-                Vector3 diff = cargoBoxTransforms[i].localPosition - cargoBoxTransforms[j].localPosition;
-                diff.y = 0f;
-                float dist = diff.magnitude;
-                if (dist < boxRadius && dist > 0.001f)
-                {
-                    Vector3 push = diff.normalized * (boxRadius - dist) * 0.5f;
-                    Vector3 lpI = cargoBoxTransforms[i].localPosition;
-                    Vector3 lpJ = cargoBoxTransforms[j].localPosition;
-                    lpI.x += push.x; lpI.z += push.z;
-                    lpJ.x -= push.x; lpJ.z -= push.z;
-                    cargoBoxTransforms[i].localPosition = lpI;
-                    cargoBoxTransforms[j].localPosition = lpJ;
-                }
-            }
-        }
+    private void OnDestroy()
+    {
+        if (cargoBedProxy != null)
+            Destroy(cargoBedProxy);
     }
 
     void Update()
