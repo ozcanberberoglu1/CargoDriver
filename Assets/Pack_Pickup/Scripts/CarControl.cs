@@ -124,6 +124,35 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             new Vector3(2.0f, 2.3f, -2.6f), new Vector3(0.3f, 1.5f, 3.5f), bedMat);
         CreateBedPart("BedWallBack",
             new Vector3(0f, 2.3f, -0.2f), new Vector3(3.8f, 1.5f, 0.3f), bedMat);
+
+        string[] bedNames = { "TruckBedFloor", "BedWallLeft", "BedWallRight", "BedWallBack" };
+        var bedColliders = new List<Collider>();
+        foreach (string n in bedNames)
+        {
+            Transform t = transform.Find(n);
+            if (t != null)
+            {
+                Collider c = t.GetComponent<Collider>();
+                if (c != null) bedColliders.Add(c);
+            }
+        }
+
+        Collider[] truckColliders = GetComponents<Collider>();
+        Transform cargoBoxesChild = transform.Find("CargoBoxes");
+        Collider cargoBoxesCol = cargoBoxesChild != null ? cargoBoxesChild.GetComponent<Collider>() : null;
+
+        foreach (Collider bedCol in bedColliders)
+        {
+            foreach (Collider tc in truckColliders)
+                Physics.IgnoreCollision(bedCol, tc, true);
+
+            if (cargoBoxesCol != null)
+                Physics.IgnoreCollision(bedCol, cargoBoxesCol, true);
+        }
+
+        for (int i = 0; i < bedColliders.Count; i++)
+            for (int j = i + 1; j < bedColliders.Count; j++)
+                Physics.IgnoreCollision(bedColliders[i], bedColliders[j], true);
     }
 
     private void CreateBedPart(string partName, Vector3 localPos, Vector3 size, PhysicsMaterial mat)
