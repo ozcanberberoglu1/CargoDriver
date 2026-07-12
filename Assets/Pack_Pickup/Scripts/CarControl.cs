@@ -92,20 +92,41 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             t.SetParent(null, true);
 
             if (PhotonNetwork.IsMasterClient)
-            {
-                Rigidbody boxRb = t.GetComponent<Rigidbody>();
-                if (boxRb != null)
-                {
-                    boxRb.isKinematic = false;
-                    boxRb.useGravity = true;
-                }
-            }
+                SetupCargoPhysics(t);
+        }
+    }
+
+    public static void SetupCargoPhysics(Transform box)
+    {
+        Rigidbody boxRb = box.GetComponent<Rigidbody>();
+        if (boxRb == null) return;
+
+        boxRb.isKinematic = false;
+        boxRb.useGravity = true;
+        boxRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        boxRb.interpolation = RigidbodyInterpolation.Interpolate;
+        boxRb.solverIterations = 12;
+        boxRb.solverVelocityIterations = 4;
+
+        PhysicsMaterial mat = new PhysicsMaterial("CargoFriction")
+        {
+            staticFriction = 0.8f,
+            dynamicFriction = 0.5f,
+            bounciness = 0.02f,
+            frictionCombine = PhysicsMaterialCombine.Maximum,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+
+        foreach (Collider col in box.GetComponentsInChildren<Collider>())
+        {
+            if (!col.isTrigger)
+                col.material = mat;
         }
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
     {
-        if (t.name.StartsWith("CargoBox"))
+        if (t.CompareTag("CargoBox"))
             list.Add(t);
         foreach (Transform child in t)
             FindCargoRecursive(child, list);
@@ -141,13 +162,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 if (snap != null && snap.HasParent) continue;
 
                 box.SetParent(null, true);
-
-                Rigidbody boxRb = box.GetComponent<Rigidbody>();
-                if (boxRb != null)
-                {
-                    boxRb.isKinematic = false;
-                    boxRb.useGravity = true;
-                }
+                SetupCargoPhysics(box);
             }
         }
 

@@ -270,13 +270,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 if (snap != null && snap.HasParent) continue;
 
                 child.SetParent(null, true);
-
-                Rigidbody boxRb = child.GetComponent<Rigidbody>();
-                if (boxRb != null)
-                {
-                    boxRb.isKinematic = false;
-                    boxRb.useGravity = true;
-                }
+                CarControl.SetupCargoPhysics(child);
             }
         }
 
@@ -315,7 +309,11 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         Rigidbody rb = pickup.GetComponent<Rigidbody>();
         if (rb != null)
+        {
             rb.isKinematic = false;
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+        }
 
         CarControl cc = pickup.GetComponent<CarControl>();
         if (cc != null)
@@ -425,7 +423,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (col == null) box.AddComponent<BoxCollider>();
 
             rb.mass = 2f;
-            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
             rb.isKinematic = true;
             rb.useGravity = false;
 
