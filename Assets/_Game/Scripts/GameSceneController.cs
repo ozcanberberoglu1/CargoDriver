@@ -428,6 +428,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         var byIndex = new Dictionary<int, GameObject>();
         var parentOf = new Dictionary<int, int>();
 
+        // --- Pass 1: Freeze ALL boxes (kinematic), set name/tag/scale. ---
+        // Physics must NOT run until snap groups are rebuilt, otherwise gravity
+        // pulls the boxes apart before they can be connected.
         foreach (var pv in boxes)
         {
             object[] d = pv.InstantiationData;
@@ -436,38 +439,34 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             int index = Convert.ToInt32(d[3]);
             int pIdx = Convert.ToInt32(d[4]);
             GameObject box = pv.gameObject;
-            Debug.Log($"[GameScene] Box ViewID={pv.ViewID} index={index} parentIdx={pIdx} pos={box.transform.position}");
 
             box.name = $"CargoBox_{index}";
             box.tag = "CargoBox";
             box.transform.localScale = new Vector3(
                 Convert.ToSingle(d[0]), Convert.ToSingle(d[1]), Convert.ToSingle(d[2]));
 
-            // Master is the physics authority (boxes have Fixed ownership); other
-            // clients keep the box kinematic and mirror it via PhotonTransformView,
-            // so it stays smooth (no local physics fighting the network updates).
             Rigidbody boxRb = box.GetComponent<Rigidbody>();
             if (boxRb != null)
             {
-                if (PhotonNetwork.IsMasterClient)
-                {
-                    boxRb.isKinematic = false;
-                    boxRb.useGravity = true;
-                }
-                else
-                {
-                    boxRb.isKinematic = true;
-                    boxRb.useGravity = false;
-                }
+                boxRb.isKinematic = true;
+                boxRb.useGravity = false;
             }
 
             byIndex[index] = box;
             parentOf[index] = pIdx;
         }
 
-        // Rebuild snap groups: parent each snapped child under its parent lego.
-        // This mirrors what lobby does when LegoSnap.TrySnap() connects two boxes:
-        // destroy child Rigidbody, SetParent to parent lego, disable child PTV.
+        // --- Pass 2: Disable child PTVs FIRST (before parenting changes localPosition). ---
+        foreach (var kv in parentOf)
+        {
+            if (kv.Value < 0) continue;
+            if (!byIndex.ContainsKey(kv.Key)) continue;
+
+            PhotonTransformView cptv = byIndex[kv.Key].GetComponent<PhotonTransformView>();
+            if (cptv != null) cptv.enabled = false;
+        }
+
+        // --- Pass 3: Rebuild snap groups (parent children under parents). ---
         foreach (var kv in parentOf)
         {
             int idx = kv.Key, pidx = kv.Value;
@@ -477,30 +476,32 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             GameObject child = byIndex[idx];
             GameObject parent = byIndex[pidx];
 
-            // Destroy Rigidbody before parenting (same as LegoSnap.TrySnap)
             Rigidbody childRb = child.GetComponent<Rigidbody>();
             if (childRb != null) Destroy(childRb);
 
-            // Parent the child lego under the parent lego (worldPositionStays=true
-            // preserves the child's world position so it doesn't jump)
             child.transform.SetParent(parent.transform, true);
 
-            // Disable child's PhotonTransformView: the child is now parented and
-            // moves with its parent. If PTV stays on it would fight the parenting.
-            PhotonTransformView cptv = child.GetComponent<PhotonTransformView>();
-            if (cptv != null) cptv.enabled = false;
-
-            // Register the snap relationship
             LegoSnap childSnap = child.GetComponent<LegoSnap>();
             LegoSnap parentSnap = parent.GetComponent<LegoSnap>();
             if (childSnap != null && parentSnap != null)
-            {
                 childSnap.SetParentDirect(parentSnap);
-                Debug.Log($"[GameScene] Snap: {child.name}(idx={idx}) -> {parent.name}(idx={pidx}) localPos={child.transform.localPosition}");
-            }
-            else
+        }
+
+        // --- Pass 4: Enable physics on root boxes (master only). ---
+        // Non-master stays kinematic; PhotonTransformView mirrors the master.
+        if (PhotonNetwork.IsMasterClient)
+        {
+            foreach (var kv in byIndex)
             {
-                Debug.LogWarning($"[GameScene] Snap FAILED: child={child.name} LegoSnap={childSnap != null}, parent={parent.name} LegoSnap={parentSnap != null}");
+                LegoSnap s = kv.Value.GetComponent<LegoSnap>();
+                if (s != null && s.HasParent) continue;
+
+                Rigidbody boxRb = kv.Value.GetComponent<Rigidbody>();
+                if (boxRb != null)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                }
             }
         }
 
