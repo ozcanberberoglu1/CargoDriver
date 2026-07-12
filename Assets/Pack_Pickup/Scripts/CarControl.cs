@@ -20,6 +20,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
     [Header("Cargo Physics")]
     [SerializeField] [Range(1f, 4f)] private float cargoGravityMultiplier = 2.2f;
+    [SerializeField] [Range(0f, 1.5f)] private float cargoInertiaResponse = 0.65f;
+    [SerializeField] private float cargoMaxInertiaAcceleration = 14f;
+    [SerializeField] private float cargoTipTorque = 0.22f;
 
     private Rigidbody rb;
     private float currentTurnAngle;
@@ -37,6 +40,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private GameObject cargoBedProxy;
     private Collider[] cargoBedColliders;
     private bool cargoInitialized;
+    private Vector3 previousCargoVehicleVelocity;
+    private Vector3 previousCargoAngularVelocity;
+    private bool cargoMotionInitialized;
 
     private const byte INPUT_EVENT = 42;
     private readonly Dictionary<int, float[]> remoteInputs = new();
@@ -55,6 +61,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             targetPos = rb.position;
             targetRot = rb.rotation;
+            previousCargoVehicleVelocity = rb.linearVelocity;
+            previousCargoAngularVelocity = rb.angularVelocity;
+            cargoMotionInitialized = true;
         }
 
         CreateCargoBedProxy();
@@ -166,8 +175,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         PhysicsMaterial bedMaterial = new PhysicsMaterial("CargoBedFriction")
         {
-            staticFriction = 0.38f,
-            dynamicFriction = 0.24f,
+            staticFriction = 0.24f,
+            dynamicFriction = 0.16f,
             bounciness = 0f,
             frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
@@ -293,6 +302,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public void SnapCargoBedProxyToTruck()
     {
         CreateCargoBedProxy();
+        if (rb == null) return;
+        previousCargoVehicleVelocity = rb.linearVelocity;
+        previousCargoAngularVelocity = rb.angularVelocity;
+        cargoMotionInitialized = true;
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -336,6 +349,13 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             }
         }
 
+        previousCargoVehicleVelocity = rb != null
+            ? rb.linearVelocity
+            : Vector3.zero;
+        previousCargoAngularVelocity = rb != null
+            ? rb.angularVelocity
+            : Vector3.zero;
+        cargoMotionInitialized = true;
         remoteInputs.Clear();
     }
 
@@ -373,7 +393,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
-            ApplyCargoGravity();
+            ApplyCargoDynamics();
             return;
         }
 
@@ -385,15 +405,35 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             bool brake = false;
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
-            ApplyCargoGravity();
+            ApplyCargoDynamics();
         }
     }
 
-    private void ApplyCargoGravity()
+    private void ApplyCargoDynamics()
     {
-        if (cargoBoxTransforms == null) return;
+        if (cargoBoxTransforms == null || rb == null) return;
 
         Vector3 extraGravity = Physics.gravity * (cargoGravityMultiplier - 1f);
+        Vector3 linearAcceleration = Vector3.zero;
+        Vector3 angularAcceleration = Vector3.zero;
+
+        if (cargoMotionInitialized)
+        {
+            float dt = Mathf.Max(Time.fixedDeltaTime, 0.001f);
+            linearAcceleration =
+                (rb.linearVelocity - previousCargoVehicleVelocity) / dt;
+            angularAcceleration =
+                (rb.angularVelocity - previousCargoAngularVelocity) / dt;
+        }
+
+        previousCargoVehicleVelocity = rb.linearVelocity;
+        previousCargoAngularVelocity = rb.angularVelocity;
+        cargoMotionInitialized = true;
+
+        Vector3 inertialAcceleration = Vector3.ClampMagnitude(
+            -linearAcceleration * cargoInertiaResponse,
+            cargoMaxInertiaAcceleration);
+
         foreach (Transform cargo in cargoBoxTransforms)
         {
             if (cargo == null) continue;
@@ -403,6 +443,21 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             if (cargoRb == null || cargoRb.isKinematic || !cargoRb.useGravity) continue;
 
             cargoRb.AddForce(extraGravity, ForceMode.Acceleration);
+
+            Vector3 localPosition =
+                transform.InverseTransformPoint(cargoRb.worldCenterOfMass);
+            bool insideCargoZone =
+                localPosition.x > -2.3f && localPosition.x < 2.3f &&
+                localPosition.y > 0.9f && localPosition.y < 4.5f &&
+                localPosition.z > -6f && localPosition.z < -0.45f;
+            if (!insideCargoZone) continue;
+
+            cargoRb.AddForce(inertialAcceleration, ForceMode.Acceleration);
+
+            Vector3 tippingTorque =
+                Vector3.Cross(transform.up, inertialAcceleration) * cargoTipTorque;
+            tippingTorque += -angularAcceleration * cargoTipTorque;
+            cargoRb.AddTorque(tippingTorque, ForceMode.Acceleration);
         }
     }
 
