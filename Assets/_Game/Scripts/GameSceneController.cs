@@ -256,16 +256,27 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             rb.isKinematic = false;
 
         Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent == null) yield break;
-
-        foreach (Transform child in cargoParent)
+        if (cargoParent != null)
         {
-            if (!child.name.StartsWith("CargoBox")) continue;
-            Rigidbody boxRb = child.GetComponent<Rigidbody>();
-            if (boxRb != null)
+            var children = new List<Transform>();
+            foreach (Transform child in cargoParent)
+                children.Add(child);
+
+            foreach (Transform child in children)
             {
-                boxRb.isKinematic = false;
-                boxRb.useGravity = true;
+                if (!child.name.StartsWith("CargoBox")) continue;
+
+                LegoSnap snap = child.GetComponent<LegoSnap>();
+                if (snap != null && snap.HasParent) continue;
+
+                child.SetParent(null, true);
+
+                Rigidbody boxRb = child.GetComponent<Rigidbody>();
+                if (boxRb != null)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                }
             }
         }
 
@@ -309,14 +320,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         CarControl cc = pickup.GetComponent<CarControl>();
         if (cc != null)
             cc.enabled = true;
-
-        Transform cargoBoxes = pickup.transform.Find("CargoBoxes");
-        if (cargoBoxes != null)
-        {
-            BoxCollider bc = cargoBoxes.GetComponent<BoxCollider>();
-            if (bc != null)
-                Destroy(bc);
-        }
     }
 
     #endregion
@@ -423,20 +426,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
             rb.mass = 2f;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-            if (PhotonNetwork.IsMasterClient)
-            {
-                rb.isKinematic = false;
-                rb.useGravity = true;
-            }
-            else
-            {
-                rb.isKinematic = true;
-                rb.useGravity = false;
-            }
-
-            if (box.GetComponent<CargoAutoParent>() == null)
-                box.AddComponent<CargoAutoParent>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
 
             spawnedBoxes.Add(box);
             parentIndices.Add(parentIdx);

@@ -84,14 +84,21 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
-        if (!PhotonNetwork.IsMasterClient)
+        foreach (var t in cargoBoxTransforms)
         {
-            foreach (var t in cargoBoxTransforms)
+            if (t == null) continue;
+            LegoSnap snap = t.GetComponent<LegoSnap>();
+            if (snap != null && snap.HasParent) continue;
+            t.SetParent(null, true);
+
+            if (PhotonNetwork.IsMasterClient)
             {
-                if (t == null) continue;
-                LegoSnap snap = t.GetComponent<LegoSnap>();
-                if (snap != null && snap.HasParent) continue;
-                t.SetParent(null, true);
+                Rigidbody boxRb = t.GetComponent<Rigidbody>();
+                if (boxRb != null)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                }
             }
         }
     }
@@ -123,8 +130,6 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>(true))
             wc.enabled = true;
 
-        Transform cargoParent = transform.Find("CargoBoxes");
-
         if (cargoBoxTransforms != null)
         {
             foreach (Transform box in cargoBoxTransforms)
@@ -135,7 +140,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 LegoSnap snap = box.GetComponent<LegoSnap>();
                 if (snap != null && snap.HasParent) continue;
 
-                box.SetParent(cargoParent != null ? cargoParent : transform, true);
+                box.SetParent(null, true);
 
                 Rigidbody boxRb = box.GetComponent<Rigidbody>();
                 if (boxRb != null)
