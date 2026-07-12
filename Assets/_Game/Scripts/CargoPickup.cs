@@ -5,7 +5,6 @@ using UnityEngine.InputSystem;
 public class CargoPickup : MonoBehaviourPun, IPunObservable
 {
     public static readonly System.Collections.Generic.HashSet<Transform> heldByPickup = new();
-    public static readonly System.Collections.Generic.HashSet<Transform> recentlyDroppedSet = new();
     [Header("Grab")]
     [SerializeField] public float detectRange = 5f;
     [SerializeField] public float grabDistance = 1.5f;
@@ -42,10 +41,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private float snapCooldown;
     private Vector3 frozenHoldPos;
 
-    private Transform recentlyDropped;
-    private float droppedTimer;
-    public Transform recentlyDroppedTransform => droppedTimer > 0f ? recentlyDropped : null;
-
     private bool syncHolding;
     private int syncHeldId = -1;
 
@@ -73,12 +68,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             return;
         }
 
-        if (droppedTimer > 0f)
-        {
-            droppedTimer -= Time.deltaTime;
-            if (droppedTimer <= 0f && recentlyDropped != null)
-                recentlyDropped = null;
-        }
         if (snapCooldown > 0f)
             snapCooldown -= Time.deltaTime;
 
@@ -287,17 +276,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         heldPV = heldRb.GetComponent<PhotonView>();
 
-        Debug.Log($"[CargoPickup] START GRAB: obj={rb.gameObject.name} ViewID={heldPV?.ViewID} currentOwner={heldPV?.Owner?.NickName ?? "null"} myName={PhotonNetwork.LocalPlayer.NickName} IsMaster={PhotonNetwork.IsMasterClient}");
-
         if (heldPV != null)
-        {
-            Debug.Log($"[CargoPickup] TransferOwnership called. OwnershipTransfer={heldPV.OwnershipTransfer}");
             heldPV.TransferOwnership(PhotonNetwork.LocalPlayer);
-        }
-        else
-        {
-            Debug.LogError($"[CargoPickup] NO PhotonView on {rb.gameObject.name}!");
-        }
 
         LegoSnap snap = heldRb.GetComponent<LegoSnap>();
         if (snap != null)
@@ -343,27 +323,18 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     {
         if (heldRb != null)
         {
-            UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
 
-            bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
-
-            recentlyDropped = heldRb.transform;
-            droppedTimer = 3f;
-
-            if (isGameScene && !PhotonNetwork.IsMasterClient)
-            {
-                heldRb.isKinematic = true;
-                heldRb.useGravity = false;
-            }
-            else
-            {
-                heldRb.isKinematic = false;
-                heldRb.useGravity = true;
-                heldRb.linearDamping = 0f;
-                heldRb.angularDamping = 0.05f;
-                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-            }
+            // Same behaviour in both scenes: hand the box back to its own
+            // PhotonTransformView. It is a networked object owned by the master,
+            // so the master resumes physics and syncs to everyone. CargoAutoParent
+            // re-attaches it to the truck once it rests (or it falls off if thrown).
+            EnableBoxSyncComponents(heldRb.gameObject);
+            heldRb.isKinematic = false;
+            heldRb.useGravity = true;
+            heldRb.linearDamping = 0f;
+            heldRb.angularDamping = 0.05f;
+            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         }
         heldRb = null;
         heldPV = null;
@@ -415,31 +386,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         LegoSnap snap = heldRb.GetComponent<LegoSnap>();
         if (snap == null) return;
         snap.DetachAll();
-    }
-
-    private void UpdateCargoTarget(Transform box)
-    {
-        CarControl cc = FindAnyObjectByType<CarControl>();
-        if (cc == null) return;
-
-        var field = typeof(CarControl).GetField("cargoTargetPos",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var fieldT = typeof(CarControl).GetField("cargoBoxTransforms",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (field == null || fieldT == null) return;
-
-        var targets = (Vector3[])field.GetValue(cc);
-        var transforms = (Transform[])fieldT.GetValue(cc);
-        if (targets == null || transforms == null) return;
-
-        for (int i = 0; i < transforms.Length; i++)
-        {
-            if (transforms[i] == box)
-            {
-                targets[i] = box.position;
-                break;
-            }
-        }
     }
 
     private void CarryObject()
@@ -550,9 +496,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private Quaternion syncHeldTargetRot = Quaternion.identity;
     private Vector3 heldSmoothVel;
     private string syncHeldName = "";
-    private bool syncDropTracking;
-    private GameObject dropTrackObj;
-    private Vector3 dropSmoothVel;
 
     private void RemoteSync()
     {
@@ -601,7 +544,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             if (heldRb != null)
             {
-                UpdateCargoTarget(heldRb.transform);
                 heldByPickup.Remove(heldRb.transform);
                 EnableBoxSyncComponents(heldRb.gameObject);
                 heldRb.isKinematic = false;
@@ -619,53 +561,19 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             SolveTwoBoneIK(rShoulder, rElbow, rHand, rUpperLen, rLowerLen, heldRb.position, ikWeight, true);
             SolveTwoBoneIK(lShoulder, lElbow, lHand, lUpperLen, lLowerLen, heldRb.position, ikWeight, false);
         }
-
-        if (syncDropTracking && dropTrackObj != null)
-        {
-            PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
-            if (ptv != null && ptv.enabled) ptv.enabled = false;
-            CargoBoxSync cbs = dropTrackObj.GetComponent<CargoBoxSync>();
-            if (cbs != null && cbs.enabled) cbs.enabled = false;
-
-            Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
-            if (dropRb != null) dropRb.isKinematic = true;
-
-            dropTrackObj.transform.position = Vector3.SmoothDamp(
-                dropTrackObj.transform.position, syncHeldTargetPos, ref dropSmoothVel, 0.06f);
-            dropTrackObj.transform.rotation = Quaternion.Slerp(
-                dropTrackObj.transform.rotation, syncHeldTargetRot, Time.deltaTime * 15f);
-        }
-        else if (!syncDropTracking && dropTrackObj != null)
-        {
-            Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
-            if (dropRb != null)
-            {
-                dropRb.isKinematic = false;
-                dropRb.useGravity = true;
-            }
-
-            PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
-            if (ptv != null) ptv.enabled = true;
-            CargoBoxSync cbs = dropTrackObj.GetComponent<CargoBoxSync>();
-            if (cbs != null) cbs.enabled = true;
-
-            dropSmoothVel = Vector3.zero;
-            dropTrackObj = null;
-        }
     }
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
         if (stream.IsWriting)
         {
-            bool tracking = isHolding || (droppedTimer > 0f && recentlyDropped != null);
-            Transform tracked = isHolding && heldRb != null ? heldRb.transform : recentlyDropped;
+            Transform tracked = isHolding && heldRb != null ? heldRb.transform : null;
 
             stream.SendNext(isHolding);
             stream.SendNext(heldPV != null ? heldPV.ViewID : -1);
             stream.SendNext(tracked != null ? tracked.gameObject.name : "");
 
-            if (tracking && tracked != null)
+            if (tracked != null)
             {
                 stream.SendNext(tracked.position);
                 stream.SendNext(tracked.rotation);
@@ -675,8 +583,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                 stream.SendNext(Vector3.zero);
                 stream.SendNext(Quaternion.identity);
             }
-
-            stream.SendNext(droppedTimer > 0f && !isHolding);
         }
         else
         {
@@ -685,21 +591,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             syncHeldName = (string)stream.ReceiveNext();
             syncHeldTargetPos = (Vector3)stream.ReceiveNext();
             syncHeldTargetRot = (Quaternion)stream.ReceiveNext();
-            syncDropTracking = (bool)stream.ReceiveNext();
-
-            if (syncDropTracking && dropTrackObj == null && !string.IsNullOrEmpty(syncHeldName))
-            {
-                if (syncHeldId >= 0)
-                {
-                    PhotonView pv = PhotonView.Find(syncHeldId);
-                    if (pv != null) dropTrackObj = pv.gameObject;
-                }
-                if (dropTrackObj == null)
-                    dropTrackObj = GameObject.Find(syncHeldName);
-            }
-
-            if (!syncDropTracking)
-                dropTrackObj = null;
         }
     }
 
