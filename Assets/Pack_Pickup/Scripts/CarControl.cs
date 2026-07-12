@@ -18,6 +18,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public Transform centerOfMass;
     public GameObject steeringWheel;
 
+    [Header("Cargo Physics")]
+    [SerializeField] private float cargoVelocityFollow = 4.5f;
+    [SerializeField] private float cargoMaxCarryAcceleration = 14f;
+
     private Rigidbody rb;
     private float currentTurnAngle;
 
@@ -159,8 +163,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         PhysicsMaterial bedMaterial = new PhysicsMaterial("CargoBedFriction")
         {
-            staticFriction = 0.42f,
-            dynamicFriction = 0.24f,
+            staticFriction = 0.5f,
+            dynamicFriction = 0.32f,
             bounciness = 0f,
             frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
@@ -217,6 +221,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (boxRb != null)
         {
             bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
+            bool wasKinematic = boxRb.isKinematic;
             boxRb.isKinematic = !simulate;
             boxRb.useGravity = simulate;
             boxRb.collisionDetectionMode = simulate
@@ -227,6 +232,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             boxRb.angularDamping = 0.08f;
             boxRb.solverIterations = 12;
             boxRb.solverVelocityIterations = 4;
+
+            if (simulate && wasKinematic && rb != null)
+                boxRb.linearVelocity = rb.GetPointVelocity(boxRb.worldCenterOfMass);
 
             foreach (Collider collider in box.GetComponentsInChildren<Collider>(true))
             {
@@ -260,11 +268,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (boxRb == null) return;
 
         bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
+        bool wasKinematic = boxRb.isKinematic;
         boxRb.isKinematic = !simulate;
         boxRb.useGravity = simulate;
         boxRb.collisionDetectionMode = simulate
             ? CollisionDetectionMode.ContinuousDynamic
             : CollisionDetectionMode.Discrete;
+
+        if (simulate && wasKinematic && rb != null)
+            boxRb.linearVelocity = rb.GetPointVelocity(boxRb.worldCenterOfMass);
     }
 
     public void PrepareCargoForDrop(Transform box)
@@ -362,6 +374,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
             UpdateCargoBedProxy();
+            StabilizeCargoOnTruck();
             return;
         }
 
@@ -375,19 +388,48 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             RunPhysics(v, h, brake);
         }
         UpdateCargoBedProxy();
+        if (PhotonNetwork.IsMasterClient)
+            StabilizeCargoOnTruck();
     }
 
     private void UpdateCargoBedProxy()
     {
         if (cargoBedProxyRb == null || rb == null) return;
+        cargoBedProxyRb.position = rb.position;
+        cargoBedProxyRb.rotation = rb.rotation;
+    }
 
-        float dt = Time.fixedDeltaTime;
-        Vector3 predictedPosition = rb.position + rb.linearVelocity * dt;
-        Quaternion predictedRotation = Quaternion.Euler(
-            rb.angularVelocity * Mathf.Rad2Deg * dt) * rb.rotation;
+    private void StabilizeCargoOnTruck()
+    {
+        if (cargoBoxTransforms == null || rb == null) return;
 
-        cargoBedProxyRb.MovePosition(predictedPosition);
-        cargoBedProxyRb.MoveRotation(predictedRotation);
+        foreach (Transform box in cargoBoxTransforms)
+        {
+            if (box == null) continue;
+            if (IsInSetOrChildOf(box, CargoPickup.heldByPickup)) continue;
+
+            LegoSnap snap = box.GetComponent<LegoSnap>();
+            if (snap != null && snap.HasParent) continue;
+
+            Rigidbody boxRb = box.GetComponent<Rigidbody>();
+            if (boxRb == null || boxRb.isKinematic) continue;
+
+            Vector3 localPosition = transform.InverseTransformPoint(boxRb.worldCenterOfMass);
+            bool insideCargoZone =
+                localPosition.x > -2.3f && localPosition.x < 2.3f &&
+                localPosition.y > 0.9f && localPosition.y < 5f &&
+                localPosition.z > -6f && localPosition.z < -0.45f;
+            if (!insideCargoZone) continue;
+
+            Vector3 truckPointVelocity = rb.GetPointVelocity(boxRb.worldCenterOfMass);
+            Vector3 velocityError = truckPointVelocity - boxRb.linearVelocity;
+            Vector3 carryAcceleration = Vector3.ClampMagnitude(
+                velocityError * cargoVelocityFollow,
+                cargoMaxCarryAcceleration);
+
+            carryAcceleration.y *= 0.35f;
+            boxRb.AddForce(carryAcceleration, ForceMode.Acceleration);
+        }
     }
 
     private void OnDestroy()
