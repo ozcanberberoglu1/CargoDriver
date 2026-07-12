@@ -18,6 +18,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public Transform centerOfMass;
     public GameObject steeringWheel;
 
+    [Header("Cargo Physics")]
+    [SerializeField] [Range(1f, 4f)] private float cargoGravityMultiplier = 2.2f;
+
     private Rigidbody rb;
     private float currentTurnAngle;
 
@@ -119,7 +122,16 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private void InitializeCargo(List<Transform> list)
     {
         cargoInitialized = true;
-        cargoBoxTransforms = list.ToArray();
+        var rootCargo = new List<Transform>();
+        foreach (Transform cargo in list)
+        {
+            if (cargo == null) continue;
+            LegoSnap snap = cargo.GetComponent<LegoSnap>();
+            if (snap != null && snap.HasParent) continue;
+            rootCargo.Add(cargo);
+        }
+
+        cargoBoxTransforms = rootCargo.ToArray();
         int n = cargoBoxTransforms.Length;
         cargoTargetPos = new Vector3[n];
         cargoTargetRot = new Quaternion[n];
@@ -154,10 +166,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         PhysicsMaterial bedMaterial = new PhysicsMaterial("CargoBedFriction")
         {
-            staticFriction = 0.72f,
-            dynamicFriction = 0.5f,
+            staticFriction = 0.38f,
+            dynamicFriction = 0.24f,
             bounciness = 0f,
-            frictionCombine = PhysicsMaterialCombine.Maximum,
+            frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
 
@@ -361,6 +373,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
+            ApplyCargoGravity();
             return;
         }
 
@@ -372,6 +385,24 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             bool brake = false;
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
+            ApplyCargoGravity();
+        }
+    }
+
+    private void ApplyCargoGravity()
+    {
+        if (cargoBoxTransforms == null) return;
+
+        Vector3 extraGravity = Physics.gravity * (cargoGravityMultiplier - 1f);
+        foreach (Transform cargo in cargoBoxTransforms)
+        {
+            if (cargo == null) continue;
+            if (IsInSetOrChildOf(cargo, CargoPickup.heldByPickup)) continue;
+
+            Rigidbody cargoRb = cargo.GetComponent<Rigidbody>();
+            if (cargoRb == null || cargoRb.isKinematic || !cargoRb.useGravity) continue;
+
+            cargoRb.AddForce(extraGravity, ForceMode.Acceleration);
         }
     }
 
