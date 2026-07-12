@@ -84,13 +84,20 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
                     bool isGameScene = UnityEngine.SceneManagement.SceneManager
                         .GetActiveScene().name == "GameScene";
-                    if (isGameScene && !PhotonNetwork.IsMasterClient)
+                    if (isGameScene)
                     {
                         Rigidbody dropRb = recentlyDropped.GetComponent<Rigidbody>();
                         if (dropRb != null)
                         {
                             dropRb.isKinematic = true;
                             dropRb.useGravity = false;
+                        }
+
+                        if (PhotonNetwork.IsMasterClient)
+                        {
+                            CarControl cc = FindAnyObjectByType<CarControl>();
+                            if (cc != null)
+                                cc.ReparentBoxToTruck(recentlyDropped);
                         }
                     }
                 }
@@ -365,11 +372,21 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             recentlyDroppedSet.Add(heldRb.transform);
             droppedTimer = 3f;
 
-            heldRb.isKinematic = false;
-            heldRb.useGravity = true;
-            heldRb.linearDamping = 0f;
-            heldRb.angularDamping = 0.05f;
-            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            if (isGameScene)
+            {
+                heldRb.isKinematic = true;
+                heldRb.useGravity = false;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0f;
+            }
+            else
+            {
+                heldRb.isKinematic = false;
+                heldRb.useGravity = true;
+                heldRb.linearDamping = 0f;
+                heldRb.angularDamping = 0.05f;
+                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            }
         }
         heldRb = null;
         heldPV = null;

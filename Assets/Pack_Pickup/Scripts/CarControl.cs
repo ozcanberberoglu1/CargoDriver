@@ -88,6 +88,24 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
+        Collider[] truckBodyColliders = GetComponents<Collider>();
+        Transform cbChild = transform.Find("CargoBoxes");
+        Collider cbTrigger = cbChild != null ? cbChild.GetComponent<Collider>() : null;
+
+        foreach (var t in cargoBoxTransforms)
+        {
+            if (t == null) continue;
+            foreach (Collider boxCol in t.GetComponentsInChildren<Collider>())
+            {
+                foreach (Collider tc in truckBodyColliders)
+                    Physics.IgnoreCollision(boxCol, tc, true);
+                if (cbTrigger != null)
+                    Physics.IgnoreCollision(boxCol, cbTrigger, true);
+            }
+        }
+
+        prevVelocity = rb != null ? rb.linearVelocity : Vector3.zero;
+
         if (!PhotonNetwork.IsMasterClient)
         {
             foreach (var t in cargoBoxTransforms)
@@ -97,6 +115,20 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 if (snap != null && snap.HasParent) continue;
                 t.SetParent(null, true);
             }
+        }
+    }
+
+    public void ReparentBoxToTruck(Transform box)
+    {
+        if (box == null) return;
+        Transform cargoParent = transform.Find("CargoBoxes");
+        box.SetParent(cargoParent != null ? cargoParent : transform, true);
+
+        Rigidbody boxRb = box.GetComponent<Rigidbody>();
+        if (boxRb != null)
+        {
+            boxRb.isKinematic = true;
+            boxRb.useGravity = false;
         }
     }
 
@@ -159,9 +191,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     {
         if (rb != null)
         {
-            rb.isKinematic = true;
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true;
         }
 
         foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>())

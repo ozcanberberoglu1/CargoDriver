@@ -205,9 +205,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.isKinematic = true;
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true;
         }
 
         spawnedPickup.transform.position = spawnPos;
@@ -236,9 +236,12 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Rigidbody boxRb = snap.transform.GetComponent<Rigidbody>();
             if (boxRb != null)
             {
+                if (!boxRb.isKinematic)
+                {
+                    boxRb.linearVelocity = Vector3.zero;
+                    boxRb.angularVelocity = Vector3.zero;
+                }
                 boxRb.isKinematic = true;
-                boxRb.linearVelocity = Vector3.zero;
-                boxRb.angularVelocity = Vector3.zero;
             }
 
             Vector3 newPos = rotDelta * (snap.worldPos - savedPickupPos) + spawnedPickup.transform.position;
