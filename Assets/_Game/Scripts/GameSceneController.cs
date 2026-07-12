@@ -433,6 +433,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (childSnap != null && parentSnap != null)
                 childSnap.SetParentDirect(parentSnap);
         }
+
+        CarControl carControl = pickup.GetComponent<CarControl>();
+        if (carControl != null)
+            carControl.InitializeCargoImmediately();
     }
 
     #endregion

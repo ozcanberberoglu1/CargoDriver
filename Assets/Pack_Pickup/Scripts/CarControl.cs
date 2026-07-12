@@ -34,6 +34,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private GameObject cargoBedProxy;
     private Rigidbody cargoBedProxyRb;
     private Collider[] cargoBedColliders;
+    private bool cargoInitialized;
 
     private const byte INPUT_EVENT = 42;
     private readonly Dictionary<int, float[]> remoteInputs = new();
@@ -71,6 +72,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
     private System.Collections.IEnumerator FindCargoBoxes()
     {
+        if (cargoInitialized) yield break;
+
         var list = new List<Transform>();
         int expectedCount = 1;
         if (PhotonNetwork.InRoom &&
@@ -82,6 +85,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         float timeout = 10f;
         while (timeout > 0f)
         {
+            if (cargoInitialized) yield break;
+
             list.Clear();
             foreach (Transform child in transform)
                 FindCargoRecursive(child, list);
@@ -99,6 +104,22 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             yield break;
         }
 
+        InitializeCargo(list);
+    }
+
+    public void InitializeCargoImmediately()
+    {
+        var list = new List<Transform>();
+        foreach (Transform child in transform)
+            FindCargoRecursive(child, list);
+
+        if (list.Count > 0)
+            InitializeCargo(list);
+    }
+
+    private void InitializeCargo(List<Transform> list)
+    {
+        cargoInitialized = true;
         cargoBoxTransforms = list.ToArray();
         int n = cargoBoxTransforms.Length;
         cargoTargetPos = new Vector3[n];
@@ -145,14 +166,22 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
 
-        var colliders = new List<Collider>
+        var colliders = new List<Collider>();
+        foreach (BoxCollider source in GetComponents<BoxCollider>())
         {
-            AddProxyCollider(new Vector3(0f, 1.55f, -3.25f), new Vector3(3.8f, 0.5f, 4.6f), bedMaterial),
-            AddProxyCollider(new Vector3(-1.95f, 2.35f, -3.25f), new Vector3(0.25f, 1.8f, 4.6f), bedMaterial),
-            AddProxyCollider(new Vector3(1.95f, 2.35f, -3.25f), new Vector3(0.25f, 1.8f, 4.6f), bedMaterial),
-            AddProxyCollider(new Vector3(0f, 2.35f, -0.95f), new Vector3(3.8f, 1.8f, 0.25f), bedMaterial),
-            AddProxyCollider(new Vector3(0f, 2.35f, -5.55f), new Vector3(3.8f, 1.8f, 0.25f), bedMaterial)
-        };
+            if (source.isTrigger || !source.enabled) continue;
+            colliders.Add(AddProxyCollider(
+                source.center, source.size, bedMaterial));
+        }
+
+        if (colliders.Count == 0)
+        {
+            colliders.Add(AddProxyCollider(
+                new Vector3(0f, 1.66f, -3.25f),
+                new Vector3(4.35f, 0.45f, 4.91f),
+                bedMaterial));
+        }
+
         cargoBedColliders = colliders.ToArray();
 
         Collider[] truckColliders = GetComponentsInChildren<Collider>(true);
