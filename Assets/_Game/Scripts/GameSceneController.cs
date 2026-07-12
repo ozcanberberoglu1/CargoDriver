@@ -60,7 +60,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
         else
         {
-            StartCoroutine(WaitAndSpawnCargo());
+            yield return WaitAndSpawnCargo();
         }
 
         GameObject go = new GameObject("VehicleInteraction_Local");

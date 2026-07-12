@@ -77,7 +77,26 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         {
             droppedTimer -= Time.deltaTime;
             if (droppedTimer <= 0f && recentlyDropped != null)
+            {
+                if (!heldByPickup.Contains(recentlyDropped))
+                {
+                    EnableBoxSyncComponents(recentlyDropped.gameObject);
+
+                    bool isGameScene = UnityEngine.SceneManagement.SceneManager
+                        .GetActiveScene().name == "GameScene";
+                    if (isGameScene && !PhotonNetwork.IsMasterClient)
+                    {
+                        Rigidbody dropRb = recentlyDropped.GetComponent<Rigidbody>();
+                        if (dropRb != null)
+                        {
+                            dropRb.isKinematic = true;
+                            dropRb.useGravity = false;
+                        }
+                    }
+                }
+                recentlyDroppedSet.Remove(recentlyDropped);
                 recentlyDropped = null;
+            }
         }
         if (snapCooldown > 0f)
             snapCooldown -= Time.deltaTime;
@@ -287,17 +306,10 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         heldPV = heldRb.GetComponent<PhotonView>();
 
-        Debug.Log($"[CargoPickup] START GRAB: obj={rb.gameObject.name} ViewID={heldPV?.ViewID} currentOwner={heldPV?.Owner?.NickName ?? "null"} myName={PhotonNetwork.LocalPlayer.NickName} IsMaster={PhotonNetwork.IsMasterClient}");
-
-        if (heldPV != null)
-        {
-            Debug.Log($"[CargoPickup] TransferOwnership called. OwnershipTransfer={heldPV.OwnershipTransfer}");
+        if (heldPV != null && heldPV.ViewID > 0)
             heldPV.TransferOwnership(PhotonNetwork.LocalPlayer);
-        }
         else
-        {
-            Debug.LogError($"[CargoPickup] NO PhotonView on {rb.gameObject.name}!");
-        }
+            heldPV = null;
 
         LegoSnap snap = heldRb.GetComponent<LegoSnap>();
         if (snap != null)
@@ -306,7 +318,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             if (root != snap)
             {
                 heldRb = root.GetComponent<Rigidbody>();
-                heldPV = root.GetComponent<PhotonView>();
+                PhotonView rootPV = root.GetComponent<PhotonView>();
+                heldPV = (rootPV != null && rootPV.ViewID > 0) ? rootPV : null;
             }
         }
 
@@ -349,21 +362,14 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
 
             recentlyDropped = heldRb.transform;
+            recentlyDroppedSet.Add(heldRb.transform);
             droppedTimer = 3f;
 
-            if (isGameScene && !PhotonNetwork.IsMasterClient)
-            {
-                heldRb.isKinematic = true;
-                heldRb.useGravity = false;
-            }
-            else
-            {
-                heldRb.isKinematic = false;
-                heldRb.useGravity = true;
-                heldRb.linearDamping = 0f;
-                heldRb.angularDamping = 0.05f;
-                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-            }
+            heldRb.isKinematic = false;
+            heldRb.useGravity = true;
+            heldRb.linearDamping = 0f;
+            heldRb.angularDamping = 0.05f;
+            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         }
         heldRb = null;
         heldPV = null;

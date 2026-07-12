@@ -68,6 +68,11 @@ public class CarCamera : MonoBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        AudioListener myListener = GetComponent<AudioListener>();
+        if (myListener == null)
+            myListener = gameObject.AddComponent<AudioListener>();
+        ToyController.EnsureSingleAudioListener(myListener);
     }
 
     private void Update()

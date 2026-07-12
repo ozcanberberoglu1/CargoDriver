@@ -165,7 +165,14 @@ public class VehicleInteraction : MonoBehaviour
 
         CarCamera carCam = pickup.GetComponentInChildren<CarCamera>(true);
         if (carCam != null)
+        {
             carCam.gameObject.SetActive(true);
+
+            AudioListener al = carCam.GetComponent<AudioListener>();
+            if (al == null)
+                al = carCam.gameObject.AddComponent<AudioListener>();
+            ToyController.EnsureSingleAudioListener(al);
+        }
 
         if (cursorUI != null)
             cursorUI.SetActive(false);

@@ -69,7 +69,12 @@ public class ToyController : MonoBehaviourPun
         if (!photonView.IsMine)
         {
             if (playerCamera != null)
+            {
+                AudioListener al = playerCamera.GetComponent<AudioListener>();
+                if (al != null)
+                    Destroy(al);
                 playerCamera.gameObject.SetActive(false);
+            }
 
             controller.enabled = false;
 
@@ -288,6 +293,18 @@ public class ToyController : MonoBehaviourPun
             if (cam == playerCamera) continue;
             if (cam.GetComponentInParent<ToyController>() != null) continue;
             cam.gameObject.SetActive(false);
+        }
+
+        EnsureSingleAudioListener(playerCamera.GetComponent<AudioListener>()
+            ?? playerCamera.gameObject.AddComponent<AudioListener>());
+    }
+
+    public static void EnsureSingleAudioListener(AudioListener keep)
+    {
+        foreach (AudioListener al in FindObjectsByType<AudioListener>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (al != keep)
+                Destroy(al);
         }
     }
 

@@ -39,6 +39,8 @@ public class RadioController : MonoBehaviourPunCallbacks, IOnEventCallback
     private bool isInArea;
     private bool isRecording;
     private bool isLocked;
+    private int lockOwnerActorNumber = -1;
+    private float lockTimeout;
     private AudioClip recordedClip;
     private AudioClip staticClip;
     private string micDevice;
@@ -79,6 +81,13 @@ public class RadioController : MonoBehaviourPunCallbacks, IOnEventCallback
     private void Update()
     {
         CheckArea();
+
+        if (isLocked && lockTimeout > 0f)
+        {
+            lockTimeout -= Time.deltaTime;
+            if (lockTimeout <= 0f)
+                ForceUnlock();
+        }
 
         if (!isInArea || isLocked || isRecording) return;
 
@@ -255,12 +264,16 @@ public class RadioController : MonoBehaviourPunCallbacks, IOnEventCallback
 
             case AUDIO_EVENT_LOCK:
                 isLocked = true;
+                lockOwnerActorNumber = photonEvent.Sender;
+                lockTimeout = recordDuration * 4f;
                 if (interactionUI != null) interactionUI.SetActive(false);
                 break;
 
             case AUDIO_EVENT_UNLOCK:
                 isLocked = false;
                 isRecording = false;
+                lockOwnerActorNumber = -1;
+                lockTimeout = 0f;
                 if (isInArea && interactionUI != null)
                     interactionUI.SetActive(true);
                 break;
@@ -370,6 +383,40 @@ public class RadioController : MonoBehaviourPunCallbacks, IOnEventCallback
     }
 
     #endregion
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        if (!isLocked || otherPlayer.ActorNumber != lockOwnerActorNumber) return;
+
+        bool isPlayingRecording = radioAudioSource != null
+            && radioAudioSource.isPlaying
+            && radioAudioSource.clip != staticClip;
+
+        if (!isPlayingRecording)
+            ForceUnlock();
+    }
+
+    private void ForceUnlock()
+    {
+        isLocked = false;
+        isRecording = false;
+        lockOwnerActorNumber = -1;
+        lockTimeout = 0f;
+
+        if (recordingUI != null) recordingUI.SetActive(false);
+
+        if (radioAudioSource != null && radioAudioSource.clip != staticClip)
+        {
+            radioAudioSource.Stop();
+            radioAudioSource.pitch = 1f;
+            radioAudioSource.clip = staticClip;
+            radioAudioSource.loop = true;
+            radioAudioSource.Play();
+        }
+
+        if (isInArea && interactionUI != null)
+            interactionUI.SetActive(true);
+    }
 
     #region Lock/Unlock Broadcast
 

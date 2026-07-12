@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
-public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
+public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCallback
 {
     public float enginePower = 2000.0f;
     public float brakePower = 3000.0f;
@@ -104,8 +104,84 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             FindCargoRecursive(child, list);
     }
 
-    void OnEnable() => PhotonNetwork.AddCallbackTarget(this);
-    void OnDisable() => PhotonNetwork.RemoveCallbackTarget(this);
+    public override void OnMasterClientSwitched(Player newMasterClient)
+    {
+        if (PhotonNetwork.IsMasterClient)
+            PromoteToMaster();
+        else
+            DemoteFromMaster();
+    }
+
+    private void PromoteToMaster()
+    {
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.linearVelocity = carSmoothVel;
+        }
+
+        foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>(true))
+            wc.enabled = true;
+
+        Transform cargoParent = transform.Find("CargoBoxes");
+
+        if (cargoBoxTransforms != null)
+        {
+            foreach (Transform box in cargoBoxTransforms)
+            {
+                if (box == null) continue;
+                if (CargoPickup.heldByPickup.Contains(box)) continue;
+
+                LegoSnap snap = box.GetComponent<LegoSnap>();
+                if (snap != null && snap.HasParent) continue;
+
+                box.SetParent(cargoParent != null ? cargoParent : transform, true);
+
+                Rigidbody boxRb = box.GetComponent<Rigidbody>();
+                if (boxRb != null)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                }
+            }
+        }
+
+        remoteInputs.Clear();
+    }
+
+    private void DemoteFromMaster()
+    {
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>())
+            wc.enabled = false;
+
+        if (cargoBoxTransforms != null)
+        {
+            foreach (Transform box in cargoBoxTransforms)
+            {
+                if (box == null) continue;
+                if (CargoPickup.heldByPickup.Contains(box)) continue;
+
+                LegoSnap snap = box.GetComponent<LegoSnap>();
+                if (snap != null && snap.HasParent) continue;
+
+                box.SetParent(null, true);
+
+                Rigidbody boxRb = box.GetComponent<Rigidbody>();
+                if (boxRb != null)
+                {
+                    boxRb.isKinematic = true;
+                    boxRb.useGravity = false;
+                }
+            }
+        }
+    }
 
     void FixedUpdate()
     {
@@ -161,21 +237,13 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             {
                 if (cargoBoxTransforms[i] == null) continue;
                 if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
-                if (droppedTrackingActive(cargoBoxTransforms[i])) continue;
+                if (CargoPickup.recentlyDroppedSet.Contains(cargoBoxTransforms[i])) continue;
                 cargoBoxTransforms[i].position = cargoTargetPos[i];
                 cargoBoxTransforms[i].rotation = cargoTargetRot[i];
             }
         }
     }
 
-    private bool droppedTrackingActive(Transform t)
-    {
-        foreach (var pickup in FindObjectsByType<CargoPickup>(FindObjectsSortMode.None))
-        {
-            if (pickup.recentlyDroppedTransform == t) return true;
-        }
-        return false;
-    }
 
     #region Input
 
