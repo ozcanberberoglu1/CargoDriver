@@ -236,8 +236,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             for (int i = 0; i < count; i++)
             {
                 if (cargoBoxTransforms[i] == null) continue;
-                if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
-                if (CargoPickup.recentlyDroppedSet.Contains(cargoBoxTransforms[i])) continue;
+                if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.heldByPickup)) continue;
+                if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.recentlyDroppedSet)) continue;
                 cargoBoxTransforms[i].position = cargoTargetPos[i];
                 cargoBoxTransforms[i].rotation = cargoTargetRot[i];
             }
@@ -375,6 +375,17 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             wheelMeshes[i].position = pos;
             wheelMeshes[i].rotation = rot;
         }
+    }
+
+    private static bool IsInSetOrChildOf(Transform t, System.Collections.Generic.HashSet<Transform> set)
+    {
+        Transform current = t;
+        while (current != null)
+        {
+            if (set.Contains(current)) return true;
+            current = current.parent;
+        }
+        return false;
     }
 
     #endregion
