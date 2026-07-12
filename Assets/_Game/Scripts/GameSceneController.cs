@@ -397,7 +397,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
 
-            object[] initData = { scale.x, scale.y, scale.z, i, parentIdx };
+            // Use 0-based index (i-1) to match JoinGameController's allBoxes list
+            // where parentIdx references are also 0-based.
+            int zeroBasedIndex = i - 1;
+            object[] initData = { scale.x, scale.y, scale.z, zeroBasedIndex, parentIdx };
             PhotonNetwork.InstantiateRoomObject(prefabName, worldPos, worldRot, 0, initData);
         }
     }
@@ -421,6 +424,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         yield return new WaitForSeconds(0.25f);
 
         var boxes = FindNetworkedCargoBoxes();
+        Debug.Log($"[GameScene] SetupNetworkedCargo: found {boxes.Count} boxes, expected {expected}, IsMaster={PhotonNetwork.IsMasterClient}");
         var byIndex = new Dictionary<int, GameObject>();
         var parentOf = new Dictionary<int, int>();
 
@@ -432,6 +436,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             int index = Convert.ToInt32(d[3]);
             int pIdx = Convert.ToInt32(d[4]);
             GameObject box = pv.gameObject;
+            Debug.Log($"[GameScene] Box ViewID={pv.ViewID} index={index} parentIdx={pIdx} pos={box.transform.position}");
 
             box.name = $"CargoBox_{index}";
             box.tag = "CargoBox";
@@ -461,6 +466,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
 
         // Rebuild snap groups: parent each snapped child under its parent lego.
+        // This mirrors what lobby does when LegoSnap.TrySnap() connects two boxes:
+        // destroy child Rigidbody, SetParent to parent lego, disable child PTV.
         foreach (var kv in parentOf)
         {
             int idx = kv.Key, pidx = kv.Value;
@@ -470,18 +477,31 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             GameObject child = byIndex[idx];
             GameObject parent = byIndex[pidx];
 
+            // Destroy Rigidbody before parenting (same as LegoSnap.TrySnap)
             Rigidbody childRb = child.GetComponent<Rigidbody>();
             if (childRb != null) Destroy(childRb);
 
+            // Parent the child lego under the parent lego (worldPositionStays=true
+            // preserves the child's world position so it doesn't jump)
+            child.transform.SetParent(parent.transform, true);
+
+            // Disable child's PhotonTransformView: the child is now parented and
+            // moves with its parent. If PTV stays on it would fight the parenting.
             PhotonTransformView cptv = child.GetComponent<PhotonTransformView>();
             if (cptv != null) cptv.enabled = false;
 
-            child.transform.SetParent(parent.transform, true);
-
+            // Register the snap relationship
             LegoSnap childSnap = child.GetComponent<LegoSnap>();
             LegoSnap parentSnap = parent.GetComponent<LegoSnap>();
             if (childSnap != null && parentSnap != null)
+            {
                 childSnap.SetParentDirect(parentSnap);
+                Debug.Log($"[GameScene] Snap: {child.name}(idx={idx}) -> {parent.name}(idx={pidx}) localPos={child.transform.localPosition}");
+            }
+            else
+            {
+                Debug.LogWarning($"[GameScene] Snap FAILED: child={child.name} LegoSnap={childSnap != null}, parent={parent.name} LegoSnap={parentSnap != null}");
+            }
         }
 
         SaveCargoSnapshot();
