@@ -189,8 +189,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             foreach (Collider truckCollider in truckColliders)
             {
-                if (truckCollider != null && truckCollider != bedCollider)
-                    Physics.IgnoreCollision(bedCollider, truckCollider, true);
+                if (truckCollider == null || truckCollider == bedCollider) continue;
+                if (truckCollider.transform.CompareTag("CargoBox")) continue;
+                if (truckCollider.GetComponentInParent<LegoSnap>() != null) continue;
+                Physics.IgnoreCollision(bedCollider, truckCollider, true);
             }
         }
     }
