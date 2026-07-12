@@ -159,10 +159,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         PhysicsMaterial bedMaterial = new PhysicsMaterial("CargoBedFriction")
         {
-            staticFriction = 0.8f,
-            dynamicFriction = 0.55f,
+            staticFriction = 0.42f,
+            dynamicFriction = 0.24f,
             bounciness = 0f,
-            frictionCombine = PhysicsMaterialCombine.Maximum,
+            frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
 
@@ -223,6 +223,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 ? CollisionDetectionMode.ContinuousDynamic
                 : CollisionDetectionMode.Discrete;
             boxRb.interpolation = RigidbodyInterpolation.Interpolate;
+            boxRb.linearDamping = 0.05f;
+            boxRb.angularDamping = 0.08f;
+            boxRb.solverIterations = 12;
+            boxRb.solverVelocityIterations = 4;
 
             foreach (Collider collider in box.GetComponentsInChildren<Collider>(true))
             {
@@ -269,6 +273,14 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         CreateCargoBedProxy();
         box.SetParent(null, true);
         IgnorePhysicalTruckCollisions(box);
+    }
+
+    public void SnapCargoBedProxyToTruck()
+    {
+        CreateCargoBedProxy();
+        if (cargoBedProxyRb == null || rb == null) return;
+        cargoBedProxyRb.position = rb.position;
+        cargoBedProxyRb.rotation = rb.rotation;
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -368,8 +380,14 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private void UpdateCargoBedProxy()
     {
         if (cargoBedProxyRb == null || rb == null) return;
-        cargoBedProxyRb.MovePosition(rb.position);
-        cargoBedProxyRb.MoveRotation(rb.rotation);
+
+        float dt = Time.fixedDeltaTime;
+        Vector3 predictedPosition = rb.position + rb.linearVelocity * dt;
+        Quaternion predictedRotation = Quaternion.Euler(
+            rb.angularVelocity * Mathf.Rad2Deg * dt) * rb.rotation;
+
+        cargoBedProxyRb.MovePosition(predictedPosition);
+        cargoBedProxyRb.MoveRotation(predictedRotation);
     }
 
     private void OnDestroy()
@@ -412,8 +430,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 if (cargoBoxTransforms[i] == null) continue;
                 if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.heldByPickup)) continue;
                 if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.recentlyDroppedSet)) continue;
-                cargoBoxTransforms[i].position = cargoTargetPos[i];
-                cargoBoxTransforms[i].rotation = cargoTargetRot[i];
+                cargoBoxTransforms[i].position = Vector3.SmoothDamp(
+                    cargoBoxTransforms[i].position,
+                    cargoTargetPos[i],
+                    ref cargoSmoothVel[i],
+                    0.06f);
+                cargoBoxTransforms[i].rotation = Quaternion.Slerp(
+                    cargoBoxTransforms[i].rotation,
+                    cargoTargetRot[i],
+                    Time.deltaTime * 18f);
             }
         }
     }

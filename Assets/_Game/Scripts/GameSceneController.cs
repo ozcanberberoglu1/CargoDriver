@@ -213,6 +213,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         spawnedPickup.transform.position = spawnPos;
         spawnedPickup.transform.rotation = spawnRot;
 
+        CarControl carControl = spawnedPickup.GetComponent<CarControl>();
+        if (carControl != null)
+            carControl.SnapCargoBedProxyToTruck();
+
         RestoreCargoSnapshot();
         StartCoroutine(EnableCarAfterRespawn());
     }
@@ -257,6 +261,22 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
         if (rb != null)
             rb.isKinematic = false;
+
+        CarControl carControl = spawnedPickup.GetComponent<CarControl>();
+        if (carControl != null)
+        {
+            carControl.SnapCargoBedProxyToTruck();
+
+            foreach (CargoSnapshot snapshot in savedCargoSnapshots)
+            {
+                if (snapshot.transform == null) continue;
+
+                LegoSnap snap = snapshot.transform.GetComponent<LegoSnap>();
+                if (snap != null && snap.HasParent) continue;
+
+                carControl.ReleaseCargoToBed(snapshot.transform);
+            }
+        }
 
         isDead = false;
     }
