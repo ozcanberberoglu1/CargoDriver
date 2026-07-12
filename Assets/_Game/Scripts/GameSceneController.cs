@@ -255,29 +255,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (rb != null)
             rb.isKinematic = false;
 
-        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent != null)
-        {
-            var children = new List<Transform>();
-            foreach (Transform child in cargoParent)
-                children.Add(child);
-
-            CarControl cc = spawnedPickup.GetComponent<CarControl>();
-
-            foreach (Transform child in children)
-            {
-                if (!child.CompareTag("CargoBox")) continue;
-
-                LegoSnap snap = child.GetComponent<LegoSnap>();
-                if (snap != null && snap.HasParent) continue;
-
-                child.position += Vector3.up * 0.15f;
-                child.SetParent(null, true);
-                CarControl.SetupCargoPhysics(child);
-                if (cc != null) cc.IgnoreTruckColliders(child);
-            }
-        }
-
         isDead = false;
     }
 
