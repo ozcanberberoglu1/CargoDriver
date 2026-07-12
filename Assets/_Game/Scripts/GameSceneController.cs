@@ -47,6 +47,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     private IEnumerator Start()
     {
+        CargoPickup.heldByPickup.Clear();
+
         while (!PhotonNetwork.InRoom)
             yield return null;
 
@@ -60,20 +62,25 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
         else
         {
-            StartCoroutine(WaitAndSpawnCargo());
+            yield return StartCoroutine(WaitForPickup());
         }
+
+        // Cargo boxes are real networked objects (spawned by the master), exactly
+        // like LobbyScene. Every client sets up naming/scale/snap; each box syncs
+        // through its own PhotonTransformView. Boxes are NOT parented to the truck
+        // so they stay free physics objects (rest by friction, slosh, fall off).
+        if (spawnedPickup != null)
+            StartCoroutine(SetupNetworkedCargoRoutine());
 
         GameObject go = new GameObject("VehicleInteraction_Local");
         go.AddComponent<VehicleInteraction>();
-
-        SaveCargoSnapshot();
     }
 
-    private IEnumerator WaitAndSpawnCargo()
+    private IEnumerator WaitForPickup()
     {
         GameObject pickup = null;
         float waited = 0f;
-        while (pickup == null && waited < 10f)
+        while (pickup == null && waited < 15f)
         {
             yield return new WaitForSeconds(0.3f);
             waited += 0.3f;
@@ -93,8 +100,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (bc != null)
                 Destroy(bc);
         }
-
-        SpawnCargoOnPickup(pickup);
     }
 
     private GameObject FindPickupInScene()
@@ -255,18 +260,16 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (rb != null)
             rb.isKinematic = false;
 
-        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent == null) yield break;
-
-        foreach (Transform child in cargoParent)
+        // Boxes are free networked objects (not parented to the truck), so
+        // re-enable their physics by tag. Snapped children have no Rigidbody.
+        foreach (var go in GameObject.FindGameObjectsWithTag("CargoBox"))
         {
-            if (!child.name.StartsWith("CargoBox")) continue;
-            Rigidbody boxRb = child.GetComponent<Rigidbody>();
-            if (boxRb != null)
-            {
-                boxRb.isKinematic = false;
-                boxRb.useGravity = true;
-            }
+            Rigidbody boxRb = go.GetComponent<Rigidbody>();
+            if (boxRb == null) continue;
+            boxRb.isKinematic = false;
+            boxRb.useGravity = true;
+            boxRb.linearVelocity = Vector3.zero;
+            boxRb.angularVelocity = Vector3.zero;
         }
 
         isDead = false;
@@ -363,23 +366,22 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 pv.ObservedComponents.Add(cc);
         }
 
-        SpawnCargoOnPickup(pickup);
+        MasterSpawnNetworkedCargo(pickup);
 
         return pickup;
     }
 
-    private void SpawnCargoOnPickup(GameObject pickup)
+    // Master spawns each cargo box as a real networked object (PhotonView +
+    // PhotonTransformView), identical to how LobbyScene boxes work. They appear on
+    // every client automatically and sync through their own PhotonTransformView.
+    // scale / box index / parent index are passed via instantiation data.
+    private void MasterSpawnNetworkedCargo(GameObject pickup)
     {
         var props = PhotonNetwork.CurrentRoom.CustomProperties;
         if (!props.ContainsKey("cargoData")) return;
 
         string data = props["cargoData"].ToString();
         string[] parts = data.Split(';');
-
-        Transform cargoParent = pickup.transform.Find("CargoBoxes");
-
-        var spawnedBoxes = new List<GameObject>();
-        var parentIndices = new List<int>();
 
         for (int i = 1; i < parts.Length; i++)
         {
@@ -389,70 +391,90 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Vector3 localPos = ParseVec3(c[0], c[1], c[2]);
             Quaternion localRot = ParseQuat(c[3], c[4], c[5], c[6]);
             Vector3 scale = ParseVec3(c[7], c[8], c[9]);
-            string prefabName = c.Length > 10 ? c[10] : "";
+            string prefabName = (c.Length > 10 && !string.IsNullOrEmpty(c[10])) ? c[10] : "CargoBox";
             int parentIdx = c.Length > 11 ? int.Parse(c[11]) : -1;
 
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
 
-            GameObject prefab = FindCargoPrefab(prefabName);
-            GameObject box;
-            if (prefab != null)
-            {
-                box = Instantiate(prefab, worldPos, worldRot);
-            }
-            else
-            {
-                box = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                box.transform.position = worldPos;
-                box.transform.rotation = worldRot;
-            }
+            object[] initData = { scale.x, scale.y, scale.z, i, parentIdx };
+            PhotonNetwork.InstantiateRoomObject(prefabName, worldPos, worldRot, 0, initData);
+        }
+    }
 
-            box.transform.localScale = scale;
-            box.name = $"CargoBox_{i}";
+    // Runs on every client. Waits for the networked boxes to arrive, then applies
+    // name/scale/tag from instantiation data and rebuilds the snap groups. Boxes
+    // are left as free physics objects (NOT parented to the truck) - just like in
+    // LobbyScene - so the master simulates them and each box's PhotonTransformView
+    // keeps everyone in sync.
+    private IEnumerator SetupNetworkedCargoRoutine()
+    {
+        int expected = CountCargoEntries();
+
+        float t = 0f;
+        while (t < 15f)
+        {
+            if (expected > 0 && FindNetworkedCargoBoxes().Count >= expected) break;
+            t += 0.25f;
+            yield return new WaitForSeconds(0.25f);
+        }
+        yield return new WaitForSeconds(0.25f);
+
+        var boxes = FindNetworkedCargoBoxes();
+        var byIndex = new Dictionary<int, GameObject>();
+        var parentOf = new Dictionary<int, int>();
+
+        foreach (var pv in boxes)
+        {
+            object[] d = pv.InstantiationData;
+            if (d == null || d.Length < 5) continue;
+
+            int index = Convert.ToInt32(d[3]);
+            int pIdx = Convert.ToInt32(d[4]);
+            GameObject box = pv.gameObject;
+
+            box.name = $"CargoBox_{index}";
             box.tag = "CargoBox";
+            box.transform.localScale = new Vector3(
+                Convert.ToSingle(d[0]), Convert.ToSingle(d[1]), Convert.ToSingle(d[2]));
 
-            if (cargoParent != null)
-                box.transform.SetParent(cargoParent, true);
-
-            Rigidbody rb = box.GetComponent<Rigidbody>();
-            if (rb == null) rb = box.AddComponent<Rigidbody>();
-
-            Collider col = box.GetComponent<Collider>();
-            if (col == null) box.AddComponent<BoxCollider>();
-
-            rb.mass = 2f;
-            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-            if (PhotonNetwork.IsMasterClient)
+            // Master is the physics authority (boxes have Fixed ownership); other
+            // clients keep the box kinematic and mirror it via PhotonTransformView,
+            // so it stays smooth (no local physics fighting the network updates).
+            Rigidbody boxRb = box.GetComponent<Rigidbody>();
+            if (boxRb != null)
             {
-                rb.isKinematic = false;
-                rb.useGravity = true;
-            }
-            else
-            {
-                rb.isKinematic = true;
-                rb.useGravity = false;
+                if (PhotonNetwork.IsMasterClient)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                }
+                else
+                {
+                    boxRb.isKinematic = true;
+                    boxRb.useGravity = false;
+                }
             }
 
-            if (box.GetComponent<CargoAutoParent>() == null)
-                box.AddComponent<CargoAutoParent>();
-
-            spawnedBoxes.Add(box);
-            parentIndices.Add(parentIdx);
+            byIndex[index] = box;
+            parentOf[index] = pIdx;
         }
 
-        for (int i = 0; i < spawnedBoxes.Count; i++)
+        // Rebuild snap groups: parent each snapped child under its parent lego.
+        foreach (var kv in parentOf)
         {
-            int pIdx = parentIndices[i];
-            if (pIdx < 0 || pIdx >= spawnedBoxes.Count) continue;
+            int idx = kv.Key, pidx = kv.Value;
+            if (pidx < 0) continue;
+            if (!byIndex.ContainsKey(idx) || !byIndex.ContainsKey(pidx)) continue;
 
-            GameObject child = spawnedBoxes[i];
-            GameObject parent = spawnedBoxes[pIdx];
+            GameObject child = byIndex[idx];
+            GameObject parent = byIndex[pidx];
 
             Rigidbody childRb = child.GetComponent<Rigidbody>();
-            if (childRb != null)
-                Destroy(childRb);
+            if (childRb != null) Destroy(childRb);
+
+            PhotonTransformView cptv = child.GetComponent<PhotonTransformView>();
+            if (cptv != null) cptv.enabled = false;
 
             child.transform.SetParent(parent.transform, true);
 
@@ -461,6 +483,28 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             if (childSnap != null && parentSnap != null)
                 childSnap.SetParentDirect(parentSnap);
         }
+
+        SaveCargoSnapshot();
+    }
+
+    private int CountCargoEntries()
+    {
+        var props = PhotonNetwork.CurrentRoom.CustomProperties;
+        if (!props.ContainsKey("cargoData")) return 0;
+        string[] parts = props["cargoData"].ToString().Split(';');
+        return Mathf.Max(0, parts.Length - 1);
+    }
+
+    private List<PhotonView> FindNetworkedCargoBoxes()
+    {
+        var result = new List<PhotonView>();
+        foreach (var pv in FindObjectsByType<PhotonView>(FindObjectsSortMode.None))
+        {
+            if (pv.GetComponent<LegoSnap>() == null) continue;
+            if (pv.InstantiationData == null || pv.InstantiationData.Length < 5) continue;
+            result.Add(pv);
+        }
+        return result;
     }
 
     #endregion
