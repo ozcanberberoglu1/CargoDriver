@@ -54,6 +54,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             targetRot = rb.rotation;
         }
 
+        CreateCargoBedProxy();
+
         PhotonNetwork.SendRate = 60;
         PhotonNetwork.SerializationRate = 60;
 
@@ -217,8 +219,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public void ReleaseCargoToBed(Transform box)
     {
         if (box == null) return;
-        box.SetParent(null, true);
-        IgnorePhysicalTruckCollisions(box);
+        PrepareCargoForDrop(box);
 
         Rigidbody boxRb = box.GetComponent<Rigidbody>();
         if (boxRb == null) return;
@@ -229,6 +230,14 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         boxRb.collisionDetectionMode = simulate
             ? CollisionDetectionMode.ContinuousDynamic
             : CollisionDetectionMode.Discrete;
+    }
+
+    public void PrepareCargoForDrop(Transform box)
+    {
+        if (box == null) return;
+        CreateCargoBedProxy();
+        box.SetParent(null, true);
+        IgnorePhysicalTruckCollisions(box);
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)

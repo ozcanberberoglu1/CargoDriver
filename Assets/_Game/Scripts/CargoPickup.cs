@@ -373,7 +373,12 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
             if (isGameScene)
             {
-                heldRb.transform.SetParent(null, true);
+                CarControl carControl = FindAnyObjectByType<CarControl>();
+                if (carControl != null)
+                    carControl.PrepareCargoForDrop(heldRb.transform);
+                else
+                    heldRb.transform.SetParent(null, true);
+
                 heldRb.isKinematic = false;
                 heldRb.useGravity = true;
                 heldRb.linearDamping = 0f;
