@@ -262,15 +262,19 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             foreach (Transform child in cargoParent)
                 children.Add(child);
 
+            CarControl cc = spawnedPickup.GetComponent<CarControl>();
+
             foreach (Transform child in children)
             {
-                if (!child.name.StartsWith("CargoBox")) continue;
+                if (!child.CompareTag("CargoBox")) continue;
 
                 LegoSnap snap = child.GetComponent<LegoSnap>();
                 if (snap != null && snap.HasParent) continue;
 
+                child.position += Vector3.up * 0.15f;
                 child.SetParent(null, true);
                 CarControl.SetupCargoPhysics(child);
+                if (cc != null) cc.IgnoreTruckColliders(child);
             }
         }
 

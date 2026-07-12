@@ -84,6 +84,9 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
         }
 
+        if (PhotonNetwork.IsMasterClient)
+            SetupTruckBed();
+
         foreach (var t in cargoBoxTransforms)
         {
             if (t == null) continue;
@@ -92,7 +95,66 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             t.SetParent(null, true);
 
             if (PhotonNetwork.IsMasterClient)
+            {
+                t.position += Vector3.up * 0.15f;
                 SetupCargoPhysics(t);
+                IgnoreTruckColliders(t);
+            }
+        }
+    }
+
+    private void SetupTruckBed()
+    {
+        if (transform.Find("TruckBedFloor") != null) return;
+
+        PhysicsMaterial bedMat = new PhysicsMaterial("BedFriction")
+        {
+            staticFriction = 0.9f,
+            dynamicFriction = 0.6f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Maximum,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+
+        CreateBedPart("TruckBedFloor",
+            new Vector3(0f, 1.3f, -3.25f), new Vector3(3.8f, 1.0f, 4.5f), bedMat);
+        CreateBedPart("BedWallLeft",
+            new Vector3(-2.05f, 2.3f, -2.6f), new Vector3(0.3f, 1.5f, 3.5f), bedMat);
+        CreateBedPart("BedWallRight",
+            new Vector3(2.0f, 2.3f, -2.6f), new Vector3(0.3f, 1.5f, 3.5f), bedMat);
+        CreateBedPart("BedWallBack",
+            new Vector3(0f, 2.3f, -0.2f), new Vector3(3.8f, 1.5f, 0.3f), bedMat);
+    }
+
+    private void CreateBedPart(string partName, Vector3 localPos, Vector3 size, PhysicsMaterial mat)
+    {
+        GameObject part = new GameObject(partName);
+        part.transform.SetParent(transform, false);
+        part.transform.localPosition = localPos;
+
+        Rigidbody partRb = part.AddComponent<Rigidbody>();
+        partRb.isKinematic = true;
+        partRb.useGravity = false;
+
+        BoxCollider col = part.AddComponent<BoxCollider>();
+        col.size = size;
+        col.center = Vector3.zero;
+        col.material = mat;
+    }
+
+    public void IgnoreTruckColliders(Transform box)
+    {
+        Collider boxCol = box.GetComponent<Collider>();
+        if (boxCol == null) return;
+
+        foreach (Collider tc in GetComponents<Collider>())
+            Physics.IgnoreCollision(boxCol, tc, true);
+
+        Transform cargoBoxesChild = transform.Find("CargoBoxes");
+        if (cargoBoxesChild != null)
+        {
+            foreach (Collider cc in cargoBoxesChild.GetComponents<Collider>())
+                Physics.IgnoreCollision(boxCol, cc, true);
         }
     }
 
@@ -103,6 +165,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         boxRb.isKinematic = false;
         boxRb.useGravity = true;
+        boxRb.mass = 3f;
         boxRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         boxRb.interpolation = RigidbodyInterpolation.Interpolate;
         boxRb.solverIterations = 12;
@@ -110,10 +173,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         PhysicsMaterial mat = new PhysicsMaterial("CargoFriction")
         {
-            staticFriction = 0.8f,
-            dynamicFriction = 0.5f,
-            bounciness = 0.02f,
-            frictionCombine = PhysicsMaterialCombine.Maximum,
+            staticFriction = 0.7f,
+            dynamicFriction = 0.4f,
+            bounciness = 0.01f,
+            frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
 
