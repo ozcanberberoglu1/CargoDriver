@@ -231,6 +231,13 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         box.SetParent(null, true);
         EnableTruckCollisions(box);
 
+        // GameScene'de per-box network senkronu KAPALI. Otorite tamamen
+        // CarControl (master gerçek fizik, non-master ApplyRemoteCargo).
+        PhotonTransformView ptv = box.GetComponent<PhotonTransformView>();
+        if (ptv != null) ptv.enabled = false;
+        CargoBoxSync cbs = box.GetComponent<CargoBoxSync>();
+        if (cbs != null) cbs.enabled = false;
+
         Rigidbody boxRb = box.GetComponent<Rigidbody>();
         if (boxRb != null)
         {
@@ -448,8 +455,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             Transform box = cargoBoxTransforms[i];
             if (box == null) continue;
+            // Sadece bir oyuncunun elinde olan kutular atlanır (onları tutan
+            // oyuncunun CargoPickup senkronu sürer). Bırakılan/dinlenen tüm
+            // kutular master'dan sürülür -> donup düşme olmaz.
             if (IsInSetOrChildOf(box, CargoPickup.heldByPickup)) continue;
-            if (IsInSetOrChildOf(box, CargoPickup.recentlyDroppedSet)) continue;
 
             Rigidbody boxRb = box.GetComponent<Rigidbody>();
             if (boxRb == null) continue;

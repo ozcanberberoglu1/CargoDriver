@@ -351,6 +351,14 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private void EnableBoxSyncComponents(GameObject box)
     {
+        // GameScene'de kargonun tek otoritesi CarControl (master). Per-box
+        // PhotonTransformView orada ViewID=0 ile çalışıp fizikle kavga eder,
+        // titreme ve periyodik pozisyon sıçraması yaratır. Bu yüzden GameScene'de
+        // asla yeniden aktifleştirme.
+        bool isGameScene = UnityEngine.SceneManagement.SceneManager
+            .GetActiveScene().name == "GameScene";
+        if (isGameScene) return;
+
         PhotonTransformView ptv = box.GetComponent<PhotonTransformView>();
         if (ptv != null) ptv.enabled = true;
 
@@ -374,16 +382,27 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             if (isGameScene)
             {
                 CarControl carControl = FindAnyObjectByType<CarControl>();
-                if (carControl != null)
-                    carControl.PrepareCargoForDrop(heldRb.transform);
+                if (PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom)
+                {
+                    // Master: kutu gerçek fizik otoritesine döner.
+                    if (carControl != null)
+                        carControl.ReleaseCargoToBed(heldRb.transform);
+                    else
+                    {
+                        heldRb.transform.SetParent(null, true);
+                        heldRb.isKinematic = false;
+                        heldRb.useGravity = true;
+                        heldRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                    }
+                }
                 else
+                {
+                    // Non-master: kutu kinematik kalır, master'dan (ApplyRemoteCargo)
+                    // sürülür. Yerel fizik çalıştırıp master'dan sapmaz.
                     heldRb.transform.SetParent(null, true);
-
-                heldRb.isKinematic = false;
-                heldRb.useGravity = true;
-                heldRb.linearDamping = 0f;
-                heldRb.angularDamping = 0.05f;
-                heldRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                    heldRb.isKinematic = true;
+                    heldRb.useGravity = false;
+                }
             }
             else
             {
@@ -636,7 +655,22 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
                 bool isGameScene = UnityEngine.SceneManagement.SceneManager
                     .GetActiveScene().name == "GameScene";
-                if (!isGameScene)
+                if (isGameScene)
+                {
+                    // Uzak oyuncu kutuyu bıraktı. Master gerçek fizik otoritesini
+                    // devralır; non-master kinematik kalıp ApplyRemoteCargo ile sürülür.
+                    if (PhotonNetwork.IsMasterClient)
+                    {
+                        CarControl cc = FindAnyObjectByType<CarControl>();
+                        if (cc != null) cc.ReleaseCargoToBed(heldRb.transform);
+                    }
+                    else
+                    {
+                        heldRb.isKinematic = true;
+                        heldRb.useGravity = false;
+                    }
+                }
+                else
                 {
                     heldRb.isKinematic = false;
                     heldRb.useGravity = true;
@@ -655,7 +689,17 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             SolveTwoBoneIK(lShoulder, lElbow, lHand, lUpperLen, lLowerLen, heldRb.position, ikWeight, false);
         }
 
-        if (syncDropTracking && dropTrackObj != null)
+        bool dropTrackingIsGameScene = UnityEngine.SceneManagement.SceneManager
+            .GetActiveScene().name == "GameScene";
+
+        if (dropTrackingIsGameScene)
+        {
+            // GameScene'de bırakılan kutuların 3s "grace" takibi CarControl'e
+            // devredildi (master gerçek fizik, non-master ApplyRemoteCargo).
+            // Burada transform'a dokunmuyoruz ki çift otorite/titreme olmasın.
+            dropTrackObj = null;
+        }
+        else if (syncDropTracking && dropTrackObj != null)
         {
             PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
             if (ptv != null && ptv.enabled) ptv.enabled = false;
