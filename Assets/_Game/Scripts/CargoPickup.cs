@@ -663,17 +663,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             SolveTwoBoneIK(lShoulder, lElbow, lHand, lUpperLen, lLowerLen, heldRb.position, ikWeight, false);
         }
 
-        bool dropTrackingIsGameScene = UnityEngine.SceneManagement.SceneManager
-            .GetActiveScene().name == "GameScene";
-
-        if (dropTrackingIsGameScene)
-        {
-            // GameScene'de bırakılan kutuların 3s "grace" takibi CarControl'e
-            // devredildi (master gerçek fizik, non-master ApplyRemoteCargo).
-            // Burada transform'a dokunmuyoruz ki çift otorite/titreme olmasın.
-            dropTrackObj = null;
-        }
-        else if (syncDropTracking && dropTrackObj != null)
+        if (syncDropTracking && dropTrackObj != null)
         {
             PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
             if (ptv != null && ptv.enabled) ptv.enabled = false;
