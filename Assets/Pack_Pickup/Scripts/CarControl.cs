@@ -38,6 +38,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private float wheelSpin;
 
     private GameObject cargoBedProxy;
+    private BoxCollider cargoBedCollider;
     private bool cargoInitialized;
     private PhysicsMaterial cargoPhysMat;
 
@@ -161,38 +162,76 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         };
 
         cargoBedProxy = new GameObject("CargoBedProxy");
-        cargoBedProxy.transform.SetParent(transform, false);
-        cargoBedProxy.transform.localPosition = Vector3.zero;
-        cargoBedProxy.transform.localRotation = Quaternion.identity;
+        cargoBedProxy.transform.SetPositionAndRotation(transform.position, transform.rotation);
 
         Rigidbody bedRb = cargoBedProxy.AddComponent<Rigidbody>();
         bedRb.isKinematic = true;
         bedRb.useGravity = false;
+        bedRb.interpolation = RigidbodyInterpolation.Interpolate;
+        bedRb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
 
-        BoxCollider sourceFloor = null;
+        // Aracın kasa collider'larını (zemin, sol duvar, sağ duvar, arka duvar)
+        // bağımsız kinematic proxy'ye kopyala ve orijinalleri kapat.
+        // Kutular SADECE proxy collider'larla çarpışır → aracı sektirmez.
+        var truckBoxCols = new List<BoxCollider>();
         foreach (BoxCollider bc in GetComponents<BoxCollider>())
         {
             if (bc.isTrigger || !bc.enabled) continue;
-            if (bc.size.y < 0.6f && bc.size.z > 4f)
-            {
-                sourceFloor = bc;
-                break;
-            }
+            truckBoxCols.Add(bc);
         }
 
-        BoxCollider bed = cargoBedProxy.AddComponent<BoxCollider>();
-        bed.material = cargoPhysMat;
-        if (sourceFloor != null)
+        BoxCollider floorSource = null;
+        var wallSources = new List<BoxCollider>();
+
+        foreach (BoxCollider bc in truckBoxCols)
         {
-            float top = sourceFloor.center.y + sourceFloor.size.y * 0.5f;
-            bed.size = new Vector3(sourceFloor.size.x, bedFloorThickness, sourceFloor.size.z);
-            bed.center = new Vector3(sourceFloor.center.x, top - bedFloorThickness * 0.5f, sourceFloor.center.z);
-            sourceFloor.enabled = false;
+            // Zemin: geniş, ince
+            if (bc.size.y < 0.6f && bc.size.z > 4f)
+                floorSource = bc;
+            // Yan duvarlar: dar X, uzun Z
+            else if (bc.size.x < 1f && bc.size.z > 3f)
+                wallSources.Add(bc);
+            // Arka kabin duvarı: geniş X, yüksek Y, kısa Z
+            else if (bc.size.x > 3f && bc.size.z < 2.5f && bc.center.z > -1f)
+                wallSources.Add(bc);
+        }
+
+        // Zemin proxy — kalınlaştırılmış
+        BoxCollider bed = cargoBedProxy.AddComponent<BoxCollider>();
+        cargoBedCollider = bed;
+        bed.material = cargoPhysMat;
+        if (floorSource != null)
+        {
+            float top = floorSource.center.y + floorSource.size.y * 0.5f;
+            bed.size = new Vector3(floorSource.size.x, bedFloorThickness, floorSource.size.z);
+            bed.center = new Vector3(floorSource.center.x, top - bedFloorThickness * 0.5f, floorSource.center.z);
+            floorSource.enabled = false;
         }
         else
         {
             bed.center = new Vector3(0f, 1.5f - bedFloorThickness * 0.5f, -3.25f);
             bed.size = new Vector3(4.15f, bedFloorThickness, 4.85f);
+        }
+
+        // Duvar proxy'leri — aynı boyut/pozisyon
+        foreach (BoxCollider wallSource in wallSources)
+        {
+            BoxCollider wallProxy = cargoBedProxy.AddComponent<BoxCollider>();
+            wallProxy.center = wallSource.center;
+            wallProxy.size = wallSource.size;
+            wallProxy.material = cargoPhysMat;
+            wallSource.enabled = false;
+        }
+
+        // Proxy'nin tüm collider'ları ile aracın kalan collider'ları arasında ignore
+        foreach (Collider proxyCol in cargoBedProxy.GetComponents<Collider>())
+        {
+            foreach (Collider truckCol in GetComponentsInChildren<Collider>(true))
+            {
+                if (truckCol.transform.CompareTag("CargoBox")) continue;
+                if (truckCol.GetComponentInParent<LegoSnap>() != null) continue;
+                Physics.IgnoreCollision(proxyCol, truckCol, true);
+            }
         }
     }
 
@@ -205,19 +244,27 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         CargoBoxSync cbs = box.GetComponent<CargoBoxSync>();
         if (cbs != null) cbs.enabled = false;
 
-        Collider[] truckCols = GetComponents<Collider>();
-        Transform cargoBoxesChild = transform.Find("CargoBoxes");
+        HashSet<Collider> proxyColliders = new HashSet<Collider>();
+        if (cargoBedProxy != null)
+        {
+            foreach (Collider pc in cargoBedProxy.GetComponents<Collider>())
+                proxyColliders.Add(pc);
+        }
+
         foreach (Collider boxCol in box.GetComponentsInChildren<Collider>(true))
         {
             if (boxCol.isTrigger) continue;
             boxCol.material = cargoPhysMat;
-            foreach (Collider tc in truckCols)
-                Physics.IgnoreCollision(boxCol, tc, true);
-            if (cargoBoxesChild != null)
+
+            foreach (Collider truckCol in GetComponentsInChildren<Collider>(true))
             {
-                foreach (Collider cc in cargoBoxesChild.GetComponentsInChildren<Collider>(true))
-                    Physics.IgnoreCollision(boxCol, cc, true);
+                if (truckCol == boxCol) continue;
+                if (truckCol.transform.CompareTag("CargoBox")) continue;
+                if (truckCol.GetComponentInParent<LegoSnap>() != null) continue;
+                Physics.IgnoreCollision(boxCol, truckCol, true);
             }
+            // Proxy collider'lar araçtan ayrı — kutular bunlarla ÇARPIŞMALI
+            // (yukarıdaki döngü bunları kapsamaz çünkü proxy child değil)
         }
 
         Rigidbody boxRb = box.GetComponent<Rigidbody>();
@@ -340,6 +387,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     {
         if (rb == null) return;
 
+        SyncBedProxy();
+
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
@@ -359,6 +408,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             SyncRemoteCargo();
         }
+    }
+
+    private void SyncBedProxy()
+    {
+        if (cargoBedProxy == null) return;
+        Rigidbody bedRb = cargoBedProxy.GetComponent<Rigidbody>();
+        if (bedRb == null) return;
+        bedRb.MovePosition(rb.position);
+        bedRb.MoveRotation(rb.rotation);
     }
 
     private void SyncRemoteCargo()
