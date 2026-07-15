@@ -19,8 +19,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public GameObject steeringWheel;
 
     [Header("Cargo Contact")]
-    [SerializeField] private float cargoTrayFrictionAcceleration = 6.5f;
     [SerializeField] private float cargoContactTolerance = 0.15f;
+    [SerializeField] private float cargoSlideStartAcceleration = 3.5f;
+    [SerializeField] private float cargoFullSlideAcceleration = 11f;
+    [SerializeField] [Range(0f, 1f)] private float cargoMinimumCarry = 0.25f;
 
     private Rigidbody rb;
     private float currentTurnAngle;
@@ -41,6 +43,11 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private BoxCollider cargoBedSupportCollider;
     private PhysicsMaterial cargoContactMaterial;
     private bool cargoInitialized;
+    private Vector3 lastCargoPlatformPosition;
+    private Quaternion lastCargoPlatformRotation;
+    private Vector3 lastCargoPlatformVelocity;
+    private Vector3 lastCargoPlatformAngularVelocity;
+    private bool cargoPlatformPoseInitialized;
 
     private const byte INPUT_EVENT = 42;
     private readonly Dictionary<int, float[]> remoteInputs = new();
@@ -59,6 +66,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             targetPos = rb.position;
             targetRot = rb.rotation;
+            ResetCargoPlatformPose();
         }
 
         CreateCargoBedProxy();
@@ -172,8 +180,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         cargoContactMaterial = new PhysicsMaterial("CargoContact")
         {
-            staticFriction = 0.62f,
-            dynamicFriction = 0.42f,
+            staticFriction = 0.35f,
+            dynamicFriction = 0.22f,
             bounciness = 0f,
             frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
@@ -328,6 +336,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public void SnapCargoBedProxyToTruck()
     {
         CreateCargoBedProxy();
+        ResetCargoPlatformPose();
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -372,6 +381,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         }
 
         remoteInputs.Clear();
+        ResetCargoPlatformPose();
     }
 
     private void DemoteFromMaster()
@@ -405,10 +415,11 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     {
         if (rb == null) return;
 
+        CarryCargoWithPlatformDelta();
+
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
-            ApplyCargoTrayFriction();
             return;
         }
 
@@ -421,45 +432,79 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
         }
-
-        ApplyCargoTrayFriction();
     }
 
-    private void ApplyCargoTrayFriction()
+    private void CarryCargoWithPlatformDelta()
     {
-        if (cargoBoxTransforms == null || rb == null ||
-            cargoBedSupportCollider == null) return;
+        if (rb == null) return;
 
         float dt = Mathf.Max(Time.fixedDeltaTime, 0.001f);
-        bool remoteClient = PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient;
+        Vector3 currentPosition = rb.position;
+        Quaternion currentRotation = rb.rotation;
+        Vector3 currentVelocity = PhotonNetwork.InRoom &&
+                                  !PhotonNetwork.IsMasterClient
+            ? carSmoothVel
+            : rb.linearVelocity;
+        Vector3 currentAngularVelocity = rb.angularVelocity;
 
-        foreach (Transform cargo in cargoBoxTransforms)
+        if (!cargoPlatformPoseInitialized)
         {
-            if (cargo == null) continue;
-            if (IsInSetOrChildOf(cargo, CargoPickup.heldByPickup)) continue;
-
-            Rigidbody cargoRb = cargo.GetComponent<Rigidbody>();
-            if (cargoRb == null || cargoRb.isKinematic) continue;
-            if (!TryGetCargoBedContact(cargoRb, out Vector3 contactPoint)) continue;
-
-            Vector3 trayVelocity = remoteClient
-                ? carSmoothVel
-                : rb.GetPointVelocity(contactPoint);
-            Vector3 cargoContactVelocity = cargoRb.GetPointVelocity(contactPoint);
-            Vector3 velocityError = Vector3.ProjectOnPlane(
-                trayVelocity - cargoContactVelocity,
-                transform.up);
-
-            Vector3 frictionAcceleration = Vector3.ClampMagnitude(
-                velocityError / dt,
-                cargoTrayFrictionAcceleration);
-            Vector3 frictionForce = frictionAcceleration * cargoRb.mass;
-
-            cargoRb.AddForceAtPosition(
-                frictionForce,
-                contactPoint,
-                ForceMode.Force);
+            ResetCargoPlatformPose();
+            return;
         }
+
+        Vector3 acceleration =
+            (currentVelocity - lastCargoPlatformVelocity) / dt;
+        Vector3 angularAcceleration =
+            (currentAngularVelocity - lastCargoPlatformAngularVelocity) / dt;
+        float severity = acceleration.magnitude +
+                         angularAcceleration.magnitude * 2f;
+        float slideAmount = Mathf.InverseLerp(
+            cargoSlideStartAcceleration,
+            cargoFullSlideAcceleration,
+            severity);
+        float carryFactor = Mathf.Lerp(1f, cargoMinimumCarry, slideAmount);
+        Quaternion rotationDelta =
+            currentRotation * Quaternion.Inverse(lastCargoPlatformRotation);
+
+        if (cargoBoxTransforms != null)
+        {
+            foreach (Transform cargo in cargoBoxTransforms)
+            {
+                if (cargo == null) continue;
+                if (IsInSetOrChildOf(cargo, CargoPickup.heldByPickup)) continue;
+
+                Rigidbody cargoRb = cargo.GetComponent<Rigidbody>();
+                if (cargoRb == null || cargoRb.isKinematic) continue;
+                if (!TryGetCargoBedContact(cargoRb, out _)) continue;
+
+                Vector3 fullyCarriedPosition =
+                    currentPosition +
+                    rotationDelta *
+                    (cargoRb.position - lastCargoPlatformPosition);
+                Vector3 targetPosition = Vector3.Lerp(
+                    cargoRb.position,
+                    fullyCarriedPosition,
+                    carryFactor);
+
+                cargoRb.MovePosition(targetPosition);
+            }
+        }
+
+        lastCargoPlatformPosition = currentPosition;
+        lastCargoPlatformRotation = currentRotation;
+        lastCargoPlatformVelocity = currentVelocity;
+        lastCargoPlatformAngularVelocity = currentAngularVelocity;
+    }
+
+    private void ResetCargoPlatformPose()
+    {
+        if (rb == null) return;
+        lastCargoPlatformPosition = rb.position;
+        lastCargoPlatformRotation = rb.rotation;
+        lastCargoPlatformVelocity = rb.linearVelocity;
+        lastCargoPlatformAngularVelocity = rb.angularVelocity;
+        cargoPlatformPoseInitialized = true;
     }
 
     private bool TryGetCargoBedContact(
