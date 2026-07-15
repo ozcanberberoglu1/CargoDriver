@@ -305,6 +305,19 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         CreateCargoBedProxy();
         bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
         SetupCargoBox(box, simulate);
+
+        if (cargoBoxTransforms != null && cargoTargetLocalPos != null)
+        {
+            for (int i = 0; i < cargoBoxTransforms.Length; i++)
+            {
+                if (cargoBoxTransforms[i] == box)
+                {
+                    cargoTargetLocalPos[i] = transform.InverseTransformPoint(box.position);
+                    cargoTargetLocalRot[i] = Quaternion.Inverse(transform.rotation) * box.rotation;
+                    break;
+                }
+            }
+        }
     }
 
     private void FindCargoRecursive(Transform t, List<Transform> list)
@@ -429,7 +442,6 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             Transform box = cargoBoxTransforms[i];
             if (box == null) continue;
             if (IsInSetOrChildOf(box, CargoPickup.heldByPickup)) continue;
-            if (IsInSetOrChildOf(box, CargoPickup.recentlyDroppedSet)) continue;
 
             Rigidbody boxRb = box.GetComponent<Rigidbody>();
             if (boxRb == null) continue;
