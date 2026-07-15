@@ -445,16 +445,35 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
             Rigidbody boxRb = box.GetComponent<Rigidbody>();
             if (boxRb == null) continue;
-            if (!boxRb.isKinematic)
-            {
-                boxRb.isKinematic = true;
-                boxRb.interpolation = RigidbodyInterpolation.Interpolate;
-            }
 
             Vector3 worldPos = transform.TransformPoint(cargoTargetLocalPos[i]);
             Quaternion worldRot = transform.rotation * cargoTargetLocalRot[i];
-            boxRb.MovePosition(worldPos);
-            boxRb.MoveRotation(worldRot);
+
+            float dist = Vector3.Distance(box.position, worldPos);
+
+            if (dist < 0.15f)
+            {
+                if (!boxRb.isKinematic)
+                {
+                    boxRb.isKinematic = true;
+                    boxRb.interpolation = RigidbodyInterpolation.Interpolate;
+                }
+                boxRb.MovePosition(worldPos);
+                boxRb.MoveRotation(worldRot);
+            }
+            else
+            {
+                if (boxRb.isKinematic)
+                {
+                    boxRb.isKinematic = false;
+                    boxRb.useGravity = true;
+                    boxRb.interpolation = RigidbodyInterpolation.Interpolate;
+                    boxRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                }
+                Vector3 correction = (worldPos - box.position) * 8f;
+                boxRb.linearVelocity = Vector3.Lerp(boxRb.linearVelocity, correction, 0.3f);
+                boxRb.MoveRotation(Quaternion.Slerp(box.rotation, worldRot, 0.2f));
+            }
         }
     }
 
