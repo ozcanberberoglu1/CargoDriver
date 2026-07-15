@@ -661,8 +661,14 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                     // devralır; non-master kinematik kalıp ApplyRemoteCargo ile sürülür.
                     if (PhotonNetwork.IsMasterClient)
                     {
+                        // Kutunun elde takip edilirkenki hızı = fırlatma hızı.
+                        Vector3 throwVel = heldSmoothVel;
                         CarControl cc = FindAnyObjectByType<CarControl>();
                         if (cc != null) cc.ReleaseCargoToBed(heldRb.transform);
+
+                        Rigidbody brb = heldRb.GetComponent<Rigidbody>();
+                        if (brb != null && !brb.isKinematic)
+                            brb.linearVelocity = throwVel;
                     }
                     else
                     {
