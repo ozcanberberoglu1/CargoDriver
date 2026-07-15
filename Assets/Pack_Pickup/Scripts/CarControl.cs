@@ -30,9 +30,11 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private Quaternion[] cargoTargetRot;
     private Vector3[] cargoTargetVel;
     private Vector3[] cargoTargetAngularVel;
+    private bool[] cargoTargetIsLocal;
     private float wheelSpin;
 
     private GameObject cargoBedProxy;
+    private PhysicsMaterial cargoContactMaterial;
     private bool cargoInitialized;
 
     private const byte INPUT_EVENT = 42;
@@ -134,6 +136,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         cargoTargetRot = new Quaternion[n];
         cargoTargetVel = new Vector3[n];
         cargoTargetAngularVel = new Vector3[n];
+        cargoTargetIsLocal = new bool[n];
 
         for (int i = 0; i < n; i++)
         {
@@ -162,6 +165,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         cargoBedProxy.transform.localPosition = Vector3.zero;
         cargoBedProxy.transform.localRotation = Quaternion.identity;
 
+        cargoContactMaterial = new PhysicsMaterial("CargoContact")
+        {
+            staticFriction = 0.62f,
+            dynamicFriction = 0.42f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Average,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+
         BoxCollider sourceFloor = null;
         foreach (BoxCollider candidate in GetComponents<BoxCollider>())
         {
@@ -184,13 +196,14 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 sourceFloor.center.x,
                 originalTop - supportSize.y * 0.5f,
                 sourceFloor.center.z);
-            support.material = sourceFloor.material;
+            support.material = cargoContactMaterial;
             sourceFloor.enabled = false;
         }
         else
         {
             support.center = new Vector3(0f, 1.43f, -3.25f);
             support.size = new Vector3(4.15f, 0.75f, 4.85f);
+            support.material = cargoContactMaterial;
         }
     }
 
@@ -214,8 +227,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             boxRb.linearDamping = 0f;
             boxRb.angularDamping = 0.05f;
             boxRb.solverIterations = 12;
-            boxRb.solverVelocityIterations = 4;
-            boxRb.maxDepenetrationVelocity = 2f;
+            boxRb.solverVelocityIterations = 8;
+            boxRb.maxDepenetrationVelocity = 1.5f;
+            boxRb.sleepThreshold = 0.02f;
+
+            foreach (Collider collider in box.GetComponentsInChildren<Collider>(true))
+            {
+                if (!collider.isTrigger)
+                    collider.material = cargoContactMaterial;
+            }
 
             if (simulate && wasKinematic && rb != null)
                 boxRb.linearVelocity = rb.GetPointVelocity(boxRb.worldCenterOfMass);
@@ -442,25 +462,32 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                     cargoTargetAngularVel[i] * Mathf.Rad2Deg * Time.deltaTime) *
                     cargoTargetRot[i];
 
-                float positionBlend = 1f - Mathf.Exp(-32f * Time.deltaTime);
-                float rotationBlend = 1f - Mathf.Exp(-36f * Time.deltaTime);
+                Vector3 worldTargetPosition = cargoTargetIsLocal[i]
+                    ? transform.TransformPoint(cargoTargetPos[i])
+                    : cargoTargetPos[i];
+                Quaternion worldTargetRotation = cargoTargetIsLocal[i]
+                    ? transform.rotation * cargoTargetRot[i]
+                    : cargoTargetRot[i];
+
+                float positionBlend = 1f - Mathf.Exp(-26f * Time.deltaTime);
+                float rotationBlend = 1f - Mathf.Exp(-30f * Time.deltaTime);
 
                 if (Vector3.Distance(
-                        cargoBoxTransforms[i].position, cargoTargetPos[i]) > 2f)
+                        cargoBoxTransforms[i].position, worldTargetPosition) > 2f)
                 {
-                    cargoBoxTransforms[i].position = cargoTargetPos[i];
+                    cargoBoxTransforms[i].position = worldTargetPosition;
                 }
                 else
                 {
                     cargoBoxTransforms[i].position = Vector3.Lerp(
                         cargoBoxTransforms[i].position,
-                        cargoTargetPos[i],
+                        worldTargetPosition,
                         positionBlend);
                 }
 
                 cargoBoxTransforms[i].rotation = Quaternion.Slerp(
                     cargoBoxTransforms[i].rotation,
-                    cargoTargetRot[i],
+                    worldTargetRotation,
                     rotationBlend);
             }
         }
@@ -610,6 +637,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         return false;
     }
 
+    private bool IsCargoOnTruck(Transform cargo)
+    {
+        Vector3 local = transform.InverseTransformPoint(cargo.position);
+        return
+            local.x > -2.4f && local.x < 2.4f &&
+            local.y > 0.7f && local.y < 4.8f &&
+            local.z > -6.2f && local.z < -0.35f;
+    }
+
     #endregion
 
     #region Network Sync
@@ -630,18 +666,45 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             {
                 if (cargoBoxTransforms[i] != null)
                 {
-                    stream.SendNext(cargoBoxTransforms[i].position);
-                    stream.SendNext(cargoBoxTransforms[i].rotation);
+                    bool isLocal = IsCargoOnTruck(cargoBoxTransforms[i]);
+                    stream.SendNext(isLocal);
+
                     Rigidbody cargoRb = cargoBoxTransforms[i].GetComponent<Rigidbody>();
-                    stream.SendNext(cargoRb != null
-                        ? cargoRb.linearVelocity
-                        : Vector3.zero);
-                    stream.SendNext(cargoRb != null
-                        ? cargoRb.angularVelocity
-                        : Vector3.zero);
+
+                    if (isLocal)
+                    {
+                        stream.SendNext(transform.InverseTransformPoint(
+                            cargoBoxTransforms[i].position));
+                        stream.SendNext(Quaternion.Inverse(transform.rotation) *
+                            cargoBoxTransforms[i].rotation);
+
+                        Vector3 relativeVelocity = cargoRb != null
+                            ? cargoRb.linearVelocity -
+                              rb.GetPointVelocity(cargoRb.worldCenterOfMass)
+                            : Vector3.zero;
+                        Vector3 relativeAngularVelocity = cargoRb != null
+                            ? cargoRb.angularVelocity - rb.angularVelocity
+                            : Vector3.zero;
+                        stream.SendNext(transform.InverseTransformDirection(
+                            relativeVelocity));
+                        stream.SendNext(transform.InverseTransformDirection(
+                            relativeAngularVelocity));
+                    }
+                    else
+                    {
+                        stream.SendNext(cargoBoxTransforms[i].position);
+                        stream.SendNext(cargoBoxTransforms[i].rotation);
+                        stream.SendNext(cargoRb != null
+                            ? cargoRb.linearVelocity
+                            : Vector3.zero);
+                        stream.SendNext(cargoRb != null
+                            ? cargoRb.angularVelocity
+                            : Vector3.zero);
+                    }
                 }
                 else
                 {
+                    stream.SendNext(false);
                     stream.SendNext(Vector3.zero);
                     stream.SendNext(Quaternion.identity);
                     stream.SendNext(Vector3.zero);
@@ -670,6 +733,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 cargoTargetRot = new Quaternion[boxCount];
                 cargoTargetVel = new Vector3[boxCount];
                 cargoTargetAngularVel = new Vector3[boxCount];
+                cargoTargetIsLocal = new bool[boxCount];
             }
 
             float snapshotAge = Mathf.Clamp(
@@ -679,6 +743,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
             for (int i = 0; i < boxCount; i++)
             {
+                cargoTargetIsLocal[i] = (bool)stream.ReceiveNext();
                 Vector3 receivedPosition = (Vector3)stream.ReceiveNext();
                 Quaternion receivedRotation = (Quaternion)stream.ReceiveNext();
                 cargoTargetVel[i] = (Vector3)stream.ReceiveNext();
