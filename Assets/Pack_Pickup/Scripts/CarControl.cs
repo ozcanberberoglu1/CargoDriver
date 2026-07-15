@@ -18,6 +18,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public Transform centerOfMass;
     public GameObject steeringWheel;
 
+    [Header("Cargo Contact")]
+    [SerializeField] private float cargoTrayFrictionAcceleration = 6.5f;
+    [SerializeField] private float cargoContactTolerance = 0.15f;
+
     private Rigidbody rb;
     private float currentTurnAngle;
 
@@ -34,6 +38,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private float wheelSpin;
 
     private GameObject cargoBedProxy;
+    private BoxCollider cargoBedSupportCollider;
     private PhysicsMaterial cargoContactMaterial;
     private bool cargoInitialized;
 
@@ -186,6 +191,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         }
 
         BoxCollider support = cargoBedProxy.AddComponent<BoxCollider>();
+        cargoBedSupportCollider = support;
         if (sourceFloor != null)
         {
             float originalTop = sourceFloor.center.y + sourceFloor.size.y * 0.5f;
@@ -402,6 +408,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
+            ApplyCargoTrayFriction();
             return;
         }
 
@@ -414,6 +421,93 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
         }
+
+        ApplyCargoTrayFriction();
+    }
+
+    private void ApplyCargoTrayFriction()
+    {
+        if (cargoBoxTransforms == null || rb == null ||
+            cargoBedSupportCollider == null) return;
+
+        float dt = Mathf.Max(Time.fixedDeltaTime, 0.001f);
+        bool remoteClient = PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient;
+
+        foreach (Transform cargo in cargoBoxTransforms)
+        {
+            if (cargo == null) continue;
+            if (IsInSetOrChildOf(cargo, CargoPickup.heldByPickup)) continue;
+
+            Rigidbody cargoRb = cargo.GetComponent<Rigidbody>();
+            if (cargoRb == null || cargoRb.isKinematic) continue;
+            if (!TryGetCargoBedContact(cargoRb, out Vector3 contactPoint)) continue;
+
+            Vector3 trayVelocity = remoteClient
+                ? carSmoothVel
+                : rb.GetPointVelocity(contactPoint);
+            Vector3 cargoContactVelocity = cargoRb.GetPointVelocity(contactPoint);
+            Vector3 velocityError = Vector3.ProjectOnPlane(
+                trayVelocity - cargoContactVelocity,
+                transform.up);
+
+            Vector3 frictionAcceleration = Vector3.ClampMagnitude(
+                velocityError / dt,
+                cargoTrayFrictionAcceleration);
+            Vector3 frictionForce = frictionAcceleration * cargoRb.mass;
+
+            cargoRb.AddForceAtPosition(
+                frictionForce,
+                contactPoint,
+                ForceMode.Force);
+        }
+    }
+
+    private bool TryGetCargoBedContact(
+        Rigidbody cargoRb, out Vector3 contactPoint)
+    {
+        contactPoint = cargoRb.worldCenterOfMass;
+
+        Vector3 local = transform.InverseTransformPoint(cargoRb.worldCenterOfMass);
+        bool insideBed =
+            local.x > -2.25f && local.x < 2.25f &&
+            local.z > -5.8f && local.z < -0.65f;
+        if (!insideBed) return false;
+
+        Transform supportTransform = cargoBedSupportCollider.transform;
+        Vector3 supportCenter = supportTransform.TransformPoint(
+            cargoBedSupportCollider.center);
+        float supportHalfHeight =
+            cargoBedSupportCollider.size.y *
+            Mathf.Abs(supportTransform.lossyScale.y) * 0.5f;
+        float floorTop = Vector3.Dot(
+            supportCenter + supportTransform.up * supportHalfHeight,
+            transform.up);
+
+        float lowestPoint = float.PositiveInfinity;
+        foreach (Collider collider in cargoRb.GetComponentsInChildren<Collider>(true))
+        {
+            if (collider.isTrigger) continue;
+
+            Bounds bounds = collider.bounds;
+            float projectedExtent =
+                Mathf.Abs(transform.up.x) * bounds.extents.x +
+                Mathf.Abs(transform.up.y) * bounds.extents.y +
+                Mathf.Abs(transform.up.z) * bounds.extents.z;
+            float bottom = Vector3.Dot(bounds.center, transform.up) - projectedExtent;
+            lowestPoint = Mathf.Min(lowestPoint, bottom);
+        }
+
+        if (float.IsPositiveInfinity(lowestPoint)) return false;
+
+        float gap = lowestPoint - floorTop;
+        if (gap < -cargoContactTolerance || gap > cargoContactTolerance)
+            return false;
+
+        float centerHeight =
+            Vector3.Dot(cargoRb.worldCenterOfMass, transform.up) - lowestPoint;
+        contactPoint = cargoRb.worldCenterOfMass -
+            transform.up * Mathf.Max(centerHeight, 0.05f);
+        return true;
     }
 
     private void OnDestroy()
