@@ -28,7 +28,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     private Vector3 carSmoothVel;
     private Vector3[] cargoTargetPos;
     private Quaternion[] cargoTargetRot;
-    private Vector3[] cargoSmoothVel;
+    private Vector3[] cargoTargetVel;
+    private Vector3[] cargoTargetAngularVel;
     private float wheelSpin;
 
     private GameObject cargoBedProxy;
@@ -131,7 +132,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         int n = cargoBoxTransforms.Length;
         cargoTargetPos = new Vector3[n];
         cargoTargetRot = new Quaternion[n];
-        cargoSmoothVel = new Vector3[n];
+        cargoTargetVel = new Vector3[n];
+        cargoTargetAngularVel = new Vector3[n];
 
         for (int i = 0; i < n; i++)
         {
@@ -434,15 +436,32 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 if (cargoBoxTransforms[i] == null) continue;
                 if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.heldByPickup)) continue;
                 if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.recentlyDroppedSet)) continue;
-                cargoBoxTransforms[i].position = Vector3.SmoothDamp(
-                    cargoBoxTransforms[i].position,
-                    cargoTargetPos[i],
-                    ref cargoSmoothVel[i],
-                    0.06f);
+
+                cargoTargetPos[i] += cargoTargetVel[i] * Time.deltaTime;
+                cargoTargetRot[i] = Quaternion.Euler(
+                    cargoTargetAngularVel[i] * Mathf.Rad2Deg * Time.deltaTime) *
+                    cargoTargetRot[i];
+
+                float positionBlend = 1f - Mathf.Exp(-32f * Time.deltaTime);
+                float rotationBlend = 1f - Mathf.Exp(-36f * Time.deltaTime);
+
+                if (Vector3.Distance(
+                        cargoBoxTransforms[i].position, cargoTargetPos[i]) > 2f)
+                {
+                    cargoBoxTransforms[i].position = cargoTargetPos[i];
+                }
+                else
+                {
+                    cargoBoxTransforms[i].position = Vector3.Lerp(
+                        cargoBoxTransforms[i].position,
+                        cargoTargetPos[i],
+                        positionBlend);
+                }
+
                 cargoBoxTransforms[i].rotation = Quaternion.Slerp(
                     cargoBoxTransforms[i].rotation,
                     cargoTargetRot[i],
-                    Time.deltaTime * 18f);
+                    rotationBlend);
             }
         }
     }
@@ -613,11 +632,20 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                 {
                     stream.SendNext(cargoBoxTransforms[i].position);
                     stream.SendNext(cargoBoxTransforms[i].rotation);
+                    Rigidbody cargoRb = cargoBoxTransforms[i].GetComponent<Rigidbody>();
+                    stream.SendNext(cargoRb != null
+                        ? cargoRb.linearVelocity
+                        : Vector3.zero);
+                    stream.SendNext(cargoRb != null
+                        ? cargoRb.angularVelocity
+                        : Vector3.zero);
                 }
                 else
                 {
                     stream.SendNext(Vector3.zero);
                     stream.SendNext(Quaternion.identity);
+                    stream.SendNext(Vector3.zero);
+                    stream.SendNext(Vector3.zero);
                 }
             }
         }
@@ -640,13 +668,27 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             {
                 cargoTargetPos = new Vector3[boxCount];
                 cargoTargetRot = new Quaternion[boxCount];
-                cargoSmoothVel = new Vector3[boxCount];
+                cargoTargetVel = new Vector3[boxCount];
+                cargoTargetAngularVel = new Vector3[boxCount];
             }
+
+            float snapshotAge = Mathf.Clamp(
+                (float)(PhotonNetwork.Time - info.SentServerTime),
+                0f,
+                0.25f);
 
             for (int i = 0; i < boxCount; i++)
             {
-                cargoTargetPos[i] = (Vector3)stream.ReceiveNext();
-                cargoTargetRot[i] = (Quaternion)stream.ReceiveNext();
+                Vector3 receivedPosition = (Vector3)stream.ReceiveNext();
+                Quaternion receivedRotation = (Quaternion)stream.ReceiveNext();
+                cargoTargetVel[i] = (Vector3)stream.ReceiveNext();
+                cargoTargetAngularVel[i] = (Vector3)stream.ReceiveNext();
+
+                cargoTargetPos[i] =
+                    receivedPosition + cargoTargetVel[i] * snapshotAge;
+                cargoTargetRot[i] = Quaternion.Euler(
+                    cargoTargetAngularVel[i] * Mathf.Rad2Deg * snapshotAge) *
+                    receivedRotation;
             }
         }
     }
