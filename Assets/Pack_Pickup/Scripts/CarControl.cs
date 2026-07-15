@@ -18,9 +18,12 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public Transform centerOfMass;
     public GameObject steeringWheel;
 
-    [Header("Cargo Contact")]
-    [SerializeField] private float cargoTrayFrictionAcceleration = 6.5f;
-    [SerializeField] private float cargoContactTolerance = 0.15f;
+    [Header("Cargo Physics (pure)")]
+    [SerializeField] private float cargoMass = 10f;
+    [SerializeField] private float cargoAngularDamping = 0.35f;
+    [SerializeField] private float cargoStaticFriction = 0.6f;
+    [SerializeField] private float cargoDynamicFriction = 0.5f;
+    [SerializeField] private float bedFloorThickness = 0.9f;
 
     private Rigidbody rb;
     private float currentTurnAngle;
@@ -65,6 +68,13 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         PhotonNetwork.SendRate = 60;
         PhotonNetwork.SerializationRate = 60;
+
+        bool simulateTruck = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
+        if (rb != null && simulateTruck)
+        {
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+        }
 
         if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
         {
@@ -172,13 +182,15 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         cargoContactMaterial = new PhysicsMaterial("CargoContact")
         {
-            staticFriction = 0.62f,
-            dynamicFriction = 0.42f,
+            staticFriction = cargoStaticFriction,
+            dynamicFriction = cargoDynamicFriction,
             bounciness = 0f,
             frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
 
+        // Kasa zemini collider'ı çok ince (0.31) -> tunneling. Aynı üst yüzeyi
+        // koruyarak aşağı doğru kalınlaştırılmış bir zemin ile değiştiriyoruz.
         BoxCollider sourceFloor = null;
         foreach (BoxCollider candidate in GetComponents<BoxCollider>())
         {
@@ -192,24 +204,24 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
         BoxCollider support = cargoBedProxy.AddComponent<BoxCollider>();
         cargoBedSupportCollider = support;
+        support.material = cargoContactMaterial;
+
         if (sourceFloor != null)
         {
             float originalTop = sourceFloor.center.y + sourceFloor.size.y * 0.5f;
             Vector3 supportSize = sourceFloor.size;
-            supportSize.y = 0.75f;
+            supportSize.y = bedFloorThickness;
             support.size = supportSize;
             support.center = new Vector3(
                 sourceFloor.center.x,
                 originalTop - supportSize.y * 0.5f,
                 sourceFloor.center.z);
-            support.material = cargoContactMaterial;
             sourceFloor.enabled = false;
         }
         else
         {
-            support.center = new Vector3(0f, 1.43f, -3.25f);
-            support.size = new Vector3(4.15f, 0.75f, 4.85f);
-            support.material = cargoContactMaterial;
+            support.center = new Vector3(0f, 1.5f - bedFloorThickness * 0.5f, -3.25f);
+            support.size = new Vector3(4.15f, bedFloorThickness, 4.85f);
         }
     }
 
@@ -224,18 +236,20 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         {
             bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
             bool wasKinematic = boxRb.isKinematic;
-            boxRb.isKinematic = !simulate;
+
+            boxRb.mass = cargoMass;
             boxRb.useGravity = simulate;
+            boxRb.isKinematic = !simulate;
+            boxRb.interpolation = RigidbodyInterpolation.Interpolate;
             boxRb.collisionDetectionMode = simulate
                 ? CollisionDetectionMode.ContinuousDynamic
                 : CollisionDetectionMode.Discrete;
-            boxRb.interpolation = RigidbodyInterpolation.Interpolate;
             boxRb.linearDamping = 0f;
-            boxRb.angularDamping = 0.05f;
-            boxRb.solverIterations = 12;
-            boxRb.solverVelocityIterations = 8;
-            boxRb.maxDepenetrationVelocity = 1.5f;
-            boxRb.sleepThreshold = 0.02f;
+            boxRb.angularDamping = cargoAngularDamping;
+            boxRb.solverIterations = 20;
+            boxRb.solverVelocityIterations = 10;
+            boxRb.maxDepenetrationVelocity = 3f;
+            boxRb.sleepThreshold = 0.01f;
 
             foreach (Collider collider in box.GetComponentsInChildren<Collider>(true))
             {
@@ -243,9 +257,10 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
                     collider.material = cargoContactMaterial;
             }
 
-            if (simulate && wasKinematic && rb != null)
+            // Master devralırken kutuya aracın o noktadaki hızını ver ki
+            // ani bir göreli hız sıçraması olmasın (saf fizik, tek seferlik).
+            if (simulate && wasKinematic && rb != null && !rb.isKinematic)
                 boxRb.linearVelocity = rb.GetPointVelocity(boxRb.worldCenterOfMass);
-
         }
     }
 
@@ -268,14 +283,20 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
 
     private void ResolveCargoPenetration(Transform box)
     {
+        if (cargoBedSupportCollider == null) return;
+
         Vector3 local = transform.InverseTransformPoint(box.position);
         bool aboveBed =
             local.x > -2.2f && local.x < 2.2f &&
             local.z > -5.8f && local.z < -0.65f;
         if (!aboveBed) return;
 
+        Transform supportT = cargoBedSupportCollider.transform;
+        Vector3 supportCenter = supportT.TransformPoint(cargoBedSupportCollider.center);
+        float supportHalfHeight =
+            cargoBedSupportCollider.size.y * Mathf.Abs(supportT.lossyScale.y) * 0.5f;
         float floorTop = Vector3.Dot(
-            transform.TransformPoint(new Vector3(0f, 1.82f, -3.25f)),
+            supportCenter + transform.up * supportHalfHeight,
             transform.up);
         float lowestPoint = float.PositiveInfinity;
 
@@ -300,21 +321,8 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
     public void ReleaseCargoToBed(Transform box)
     {
         if (box == null) return;
-        PrepareCargoForDrop(box);
-
-        Rigidbody boxRb = box.GetComponent<Rigidbody>();
-        if (boxRb == null) return;
-
-        bool simulate = !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
-        bool wasKinematic = boxRb.isKinematic;
-        boxRb.isKinematic = !simulate;
-        boxRb.useGravity = simulate;
-        boxRb.collisionDetectionMode = simulate
-            ? CollisionDetectionMode.ContinuousDynamic
-            : CollisionDetectionMode.Discrete;
-
-        if (simulate && wasKinematic && rb != null)
-            boxRb.linearVelocity = rb.GetPointVelocity(boxRb.worldCenterOfMass);
+        CreateCargoBedProxy();
+        ConfigureCargoAuthority(box);
     }
 
     public void PrepareCargoForDrop(Transform box)
@@ -408,7 +416,6 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
         if (!PhotonNetwork.InRoom)
         {
             RunPhysics(GetLocalVertical(), GetLocalHorizontal(), GetLocalBrake());
-            ApplyCargoTrayFriction();
             return;
         }
 
@@ -421,93 +428,52 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
         }
-
-        ApplyCargoTrayFriction();
-    }
-
-    private void ApplyCargoTrayFriction()
-    {
-        if (cargoBoxTransforms == null || rb == null ||
-            cargoBedSupportCollider == null) return;
-
-        float dt = Mathf.Max(Time.fixedDeltaTime, 0.001f);
-        bool remoteClient = PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient;
-
-        foreach (Transform cargo in cargoBoxTransforms)
+        else
         {
-            if (cargo == null) continue;
-            if (IsInSetOrChildOf(cargo, CargoPickup.heldByPickup)) continue;
-
-            Rigidbody cargoRb = cargo.GetComponent<Rigidbody>();
-            if (cargoRb == null || cargoRb.isKinematic) continue;
-            if (!TryGetCargoBedContact(cargoRb, out Vector3 contactPoint)) continue;
-
-            Vector3 trayVelocity = remoteClient
-                ? carSmoothVel
-                : rb.GetPointVelocity(contactPoint);
-            Vector3 cargoContactVelocity = cargoRb.GetPointVelocity(contactPoint);
-            Vector3 velocityError = Vector3.ProjectOnPlane(
-                trayVelocity - cargoContactVelocity,
-                transform.up);
-
-            Vector3 frictionAcceleration = Vector3.ClampMagnitude(
-                velocityError / dt,
-                cargoTrayFrictionAcceleration);
-            Vector3 frictionForce = frictionAcceleration * cargoRb.mass;
-
-            cargoRb.AddForceAtPosition(
-                frictionForce,
-                contactPoint,
-                ForceMode.Force);
+            ApplyRemoteCargo();
         }
     }
 
-    private bool TryGetCargoBedContact(
-        Rigidbody cargoRb, out Vector3 contactPoint)
+    // Non-master: kutular kinematik. Master'dan gelen (kasaya göreli) hedef
+    // poz/rot + hız ile MovePosition/MoveRotation -> Rigidbody interpolation
+    // devreye girer, transform kavgası ve floaty his olmaz.
+    private void ApplyRemoteCargo()
     {
-        contactPoint = cargoRb.worldCenterOfMass;
+        if (cargoBoxTransforms == null || cargoTargetPos == null) return;
 
-        Vector3 local = transform.InverseTransformPoint(cargoRb.worldCenterOfMass);
-        bool insideBed =
-            local.x > -2.25f && local.x < 2.25f &&
-            local.z > -5.8f && local.z < -0.65f;
-        if (!insideBed) return false;
+        float dt = Time.fixedDeltaTime;
+        int count = Mathf.Min(cargoBoxTransforms.Length, cargoTargetPos.Length);
 
-        Transform supportTransform = cargoBedSupportCollider.transform;
-        Vector3 supportCenter = supportTransform.TransformPoint(
-            cargoBedSupportCollider.center);
-        float supportHalfHeight =
-            cargoBedSupportCollider.size.y *
-            Mathf.Abs(supportTransform.lossyScale.y) * 0.5f;
-        float floorTop = Vector3.Dot(
-            supportCenter + supportTransform.up * supportHalfHeight,
-            transform.up);
-
-        float lowestPoint = float.PositiveInfinity;
-        foreach (Collider collider in cargoRb.GetComponentsInChildren<Collider>(true))
+        for (int i = 0; i < count; i++)
         {
-            if (collider.isTrigger) continue;
+            Transform box = cargoBoxTransforms[i];
+            if (box == null) continue;
+            if (IsInSetOrChildOf(box, CargoPickup.heldByPickup)) continue;
+            if (IsInSetOrChildOf(box, CargoPickup.recentlyDroppedSet)) continue;
 
-            Bounds bounds = collider.bounds;
-            float projectedExtent =
-                Mathf.Abs(transform.up.x) * bounds.extents.x +
-                Mathf.Abs(transform.up.y) * bounds.extents.y +
-                Mathf.Abs(transform.up.z) * bounds.extents.z;
-            float bottom = Vector3.Dot(bounds.center, transform.up) - projectedExtent;
-            lowestPoint = Mathf.Min(lowestPoint, bottom);
+            Rigidbody boxRb = box.GetComponent<Rigidbody>();
+            if (boxRb == null) continue;
+            if (!boxRb.isKinematic)
+            {
+                boxRb.isKinematic = true;
+                boxRb.interpolation = RigidbodyInterpolation.Interpolate;
+            }
+
+            // Paketler arası hız ile ekstrapolasyon (tutarlı, gecikmesiz).
+            cargoTargetPos[i] += cargoTargetVel[i] * dt;
+            cargoTargetRot[i] = Quaternion.Euler(
+                cargoTargetAngularVel[i] * Mathf.Rad2Deg * dt) * cargoTargetRot[i];
+
+            Vector3 worldPos = cargoTargetIsLocal[i]
+                ? transform.TransformPoint(cargoTargetPos[i])
+                : cargoTargetPos[i];
+            Quaternion worldRot = cargoTargetIsLocal[i]
+                ? transform.rotation * cargoTargetRot[i]
+                : cargoTargetRot[i];
+
+            boxRb.MovePosition(worldPos);
+            boxRb.MoveRotation(worldRot);
         }
-
-        if (float.IsPositiveInfinity(lowestPoint)) return false;
-
-        float gap = lowestPoint - floorTop;
-        if (gap < -cargoContactTolerance || gap > cargoContactTolerance)
-            return false;
-
-        float centerHeight =
-            Vector3.Dot(cargoRb.worldCenterOfMass, transform.up) - lowestPoint;
-        contactPoint = cargoRb.worldCenterOfMass -
-            transform.up * Mathf.Max(centerHeight, 0.05f);
-        return true;
     }
 
     private void OnDestroy()
@@ -540,50 +506,6 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             Quaternion spin = Quaternion.Euler(wheelSpin, 0f, 0f);
 
             wheelMeshes[i].rotation = transform.rotation * steer * spin;
-        }
-
-        if (!PhotonNetwork.IsMasterClient && cargoBoxTransforms != null && cargoTargetPos != null)
-        {
-            int count = Mathf.Min(cargoBoxTransforms.Length, cargoTargetPos.Length);
-            for (int i = 0; i < count; i++)
-            {
-                if (cargoBoxTransforms[i] == null) continue;
-                if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.heldByPickup)) continue;
-                if (IsInSetOrChildOf(cargoBoxTransforms[i], CargoPickup.recentlyDroppedSet)) continue;
-
-                cargoTargetPos[i] += cargoTargetVel[i] * Time.deltaTime;
-                cargoTargetRot[i] = Quaternion.Euler(
-                    cargoTargetAngularVel[i] * Mathf.Rad2Deg * Time.deltaTime) *
-                    cargoTargetRot[i];
-
-                Vector3 worldTargetPosition = cargoTargetIsLocal[i]
-                    ? transform.TransformPoint(cargoTargetPos[i])
-                    : cargoTargetPos[i];
-                Quaternion worldTargetRotation = cargoTargetIsLocal[i]
-                    ? transform.rotation * cargoTargetRot[i]
-                    : cargoTargetRot[i];
-
-                float positionBlend = 1f - Mathf.Exp(-26f * Time.deltaTime);
-                float rotationBlend = 1f - Mathf.Exp(-30f * Time.deltaTime);
-
-                if (Vector3.Distance(
-                        cargoBoxTransforms[i].position, worldTargetPosition) > 2f)
-                {
-                    cargoBoxTransforms[i].position = worldTargetPosition;
-                }
-                else
-                {
-                    cargoBoxTransforms[i].position = Vector3.Lerp(
-                        cargoBoxTransforms[i].position,
-                        worldTargetPosition,
-                        positionBlend);
-                }
-
-                cargoBoxTransforms[i].rotation = Quaternion.Slerp(
-                    cargoBoxTransforms[i].rotation,
-                    worldTargetRotation,
-                    rotationBlend);
-            }
         }
     }
 

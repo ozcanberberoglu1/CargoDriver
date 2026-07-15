@@ -315,7 +315,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (rb != null)
         {
             rb.isKinematic = false;
-            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
         }
 
