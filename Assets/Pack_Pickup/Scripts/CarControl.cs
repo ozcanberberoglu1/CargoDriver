@@ -429,6 +429,7 @@ public class CarControl : MonoBehaviourPunCallbacks, IPunObservable, IOnEventCal
             Transform box = cargoBoxTransforms[i];
             if (box == null) continue;
             if (IsInSetOrChildOf(box, CargoPickup.heldByPickup)) continue;
+            if (IsInSetOrChildOf(box, CargoPickup.recentlyDroppedSet)) continue;
 
             Rigidbody boxRb = box.GetComponent<Rigidbody>();
             if (boxRb == null) continue;
