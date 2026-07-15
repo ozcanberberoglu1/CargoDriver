@@ -86,18 +86,9 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                         .GetActiveScene().name == "GameScene";
                     if (isGameScene)
                     {
-                        Rigidbody dropRb = recentlyDropped.GetComponent<Rigidbody>();
                         CarControl cc = FindAnyObjectByType<CarControl>();
-                        if (PhotonNetwork.IsMasterClient)
-                        {
-                            if (cc != null)
-                                cc.ReleaseCargoToBed(recentlyDropped);
-                        }
-                        else if (dropRb != null)
-                        {
-                            dropRb.isKinematic = true;
-                            dropRb.useGravity = false;
-                        }
+                        if (cc != null)
+                            cc.ReleaseCargoToBed(recentlyDropped);
                     }
                 }
                 recentlyDroppedSet.Remove(recentlyDropped);
@@ -381,27 +372,14 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
             if (isGameScene)
             {
-                CarControl carControl = FindAnyObjectByType<CarControl>();
-                if (PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom)
-                {
-                    // Master: kutu gerçek fizik otoritesine döner.
-                    if (carControl != null)
-                        carControl.ReleaseCargoToBed(heldRb.transform);
-                    else
-                    {
-                        heldRb.transform.SetParent(null, true);
-                        heldRb.isKinematic = false;
-                        heldRb.useGravity = true;
-                        heldRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-                    }
-                }
+                CarControl cc = FindAnyObjectByType<CarControl>();
+                if (cc != null)
+                    cc.ReleaseCargoToBed(heldRb.transform);
                 else
                 {
-                    // Non-master: kutu kinematik kalır, master'dan (ApplyRemoteCargo)
-                    // sürülür. Yerel fizik çalıştırıp master'dan sapmaz.
                     heldRb.transform.SetParent(null, true);
-                    heldRb.isKinematic = true;
-                    heldRb.useGravity = false;
+                    heldRb.isKinematic = false;
+                    heldRb.useGravity = true;
                 }
             }
             else
@@ -657,23 +635,13 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                     .GetActiveScene().name == "GameScene";
                 if (isGameScene)
                 {
-                    // Uzak oyuncu kutuyu bıraktı. Master gerçek fizik otoritesini
-                    // devralır; non-master kinematik kalıp ApplyRemoteCargo ile sürülür.
-                    if (PhotonNetwork.IsMasterClient)
+                    CarControl cc = FindAnyObjectByType<CarControl>();
+                    if (cc != null)
                     {
-                        // Kutunun elde takip edilirkenki hızı = fırlatma hızı.
-                        Vector3 throwVel = heldSmoothVel;
-                        CarControl cc = FindAnyObjectByType<CarControl>();
-                        if (cc != null) cc.ReleaseCargoToBed(heldRb.transform);
-
+                        cc.ReleaseCargoToBed(heldRb.transform);
                         Rigidbody brb = heldRb.GetComponent<Rigidbody>();
                         if (brb != null && !brb.isKinematic)
-                            brb.linearVelocity = throwVel;
-                    }
-                    else
-                    {
-                        heldRb.isKinematic = true;
-                        heldRb.useGravity = false;
+                            brb.linearVelocity = heldSmoothVel;
                     }
                 }
                 else
@@ -722,30 +690,29 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         }
         else if (!syncDropTracking && dropTrackObj != null)
         {
-            Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
             bool isGameScene = UnityEngine.SceneManagement.SceneManager
                 .GetActiveScene().name == "GameScene";
             if (isGameScene)
             {
                 CarControl cc = FindAnyObjectByType<CarControl>();
-                if (PhotonNetwork.IsMasterClient && cc != null)
-                    cc.ReleaseCargoToBed(dropTrackObj.transform);
-                else if (dropRb != null)
+                if (cc != null)
                 {
-                    dropRb.isKinematic = true;
-                    dropRb.useGravity = false;
+                    cc.ReleaseCargoToBed(dropTrackObj.transform);
+                    Rigidbody brb = dropTrackObj.GetComponent<Rigidbody>();
+                    if (brb != null && !brb.isKinematic)
+                        brb.linearVelocity = dropSmoothVel;
                 }
             }
-            else if (dropRb != null)
+            else
             {
-                dropRb.isKinematic = false;
-                dropRb.useGravity = true;
+                Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
+                if (dropRb != null)
+                {
+                    dropRb.isKinematic = false;
+                    dropRb.useGravity = true;
+                }
+                EnableBoxSyncComponents(dropTrackObj);
             }
-
-            PhotonTransformView ptv = dropTrackObj.GetComponent<PhotonTransformView>();
-            if (ptv != null) ptv.enabled = true;
-            CargoBoxSync cbs = dropTrackObj.GetComponent<CargoBoxSync>();
-            if (cbs != null) cbs.enabled = true;
 
             dropSmoothVel = Vector3.zero;
             dropTrackObj = null;
