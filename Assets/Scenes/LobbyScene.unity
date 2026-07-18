@@ -11254,30 +11254,6 @@ PrefabInstance:
       propertyPath: m_StaticEditorFlags
       value: 2147483647
       objectReference: {fileID: 0}
-    - target: {fileID: 4862542789518881684, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0.0025138855
-      objectReference: {fileID: 0}
-    - target: {fileID: 4862542789518881684, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 1.76
-      objectReference: {fileID: 0}
-    - target: {fileID: 4862542789518881684, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -4.31
-      objectReference: {fileID: 0}
-    - target: {fileID: 4862542789518881684, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.68138814
-      objectReference: {fileID: 0}
-    - target: {fileID: 4862542789518881684, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0.73192227
-      objectReference: {fileID: 0}
-    - target: {fileID: 4862542789518881684, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: -94.096
-      objectReference: {fileID: 0}
     - target: {fileID: 5514210230411350235, guid: e2c4287a936a99c4d9988378e62d0060, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483647

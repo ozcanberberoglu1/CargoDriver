@@ -1870,6 +1870,7 @@ MonoBehaviour:
   interiorMinPitch: -30
   interiorMaxPitch: 40
   positionSmoothTime: 0.1
+  targetSmoothSpeed: 6
   lookHeight: 1.5
 --- !u!1 &6689507573417852015
 GameObject:
@@ -2297,13 +2298,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8571651686125681320}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.74082375, y: -0, z: -0, w: 0.67169946}
-  m_LocalPosition: {x: 0.0025137262, y: 1.692, z: -4.271}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.0025138855, y: 1.77, z: -4.45}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8474960979613475457}
-  m_LocalEulerAnglesHint: {x: -95.603, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &6875409690690481156
 MeshFilter:
   m_ObjectHideFlags: 0
