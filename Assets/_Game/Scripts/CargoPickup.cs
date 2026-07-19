@@ -76,8 +76,28 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (droppedTimer > 0f)
         {
             droppedTimer -= Time.deltaTime;
-            if (droppedTimer <= 0f && recentlyDropped != null)
+            if (droppedTimer <= 0f)
+            {
+                // Drop-tracking window ended. On non-master clients in GameScene
+                // hand the box back to the master's authority: turn it into a
+                // kinematic puppet again so CarControl's stream drives it and
+                // local gravity no longer fights the synced position.
+                if (recentlyDropped != null &&
+                    !(isHolding && heldRb != null && heldRb.transform == recentlyDropped))
+                {
+                    bool gs = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
+                    if (gs && !PhotonNetwork.IsMasterClient)
+                    {
+                        Rigidbody drb = recentlyDropped.GetComponent<Rigidbody>();
+                        if (drb != null)
+                        {
+                            drb.isKinematic = true;
+                            drb.useGravity = false;
+                        }
+                    }
+                }
                 recentlyDropped = null;
+            }
         }
         if (snapCooldown > 0f)
             snapCooldown -= Time.deltaTime;
@@ -346,24 +366,18 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
             UpdateCargoTarget(heldRb.transform);
             heldByPickup.Remove(heldRb.transform);
 
-            bool isGameScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
-
             recentlyDropped = heldRb.transform;
             droppedTimer = 3f;
 
-            if (isGameScene && !PhotonNetwork.IsMasterClient)
-            {
-                heldRb.isKinematic = true;
-                heldRb.useGravity = false;
-            }
-            else
-            {
-                heldRb.isKinematic = false;
-                heldRb.useGravity = true;
-                heldRb.linearDamping = 0f;
-                heldRb.angularDamping = 0.05f;
-                heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-            }
+            // Drop identically for everyone (master & non-master): let the box
+            // fall under gravity. The grabber streams its position for the
+            // droppedTimer window; afterwards authority is handed back to the
+            // master (see Update) so it becomes a stream-driven puppet again.
+            heldRb.isKinematic = false;
+            heldRb.useGravity = true;
+            heldRb.linearDamping = 0f;
+            heldRb.angularDamping = 0.05f;
+            heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         }
         heldRb = null;
         heldPV = null;
@@ -638,7 +652,20 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         else if (!syncDropTracking && dropTrackObj != null)
         {
             Rigidbody dropRb = dropTrackObj.GetComponent<Rigidbody>();
-            if (dropRb != null)
+
+            bool gs = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene";
+            if (gs && !PhotonNetwork.IsMasterClient)
+            {
+                // Non-master: the master owns the box physics and streams it via
+                // CarControl, so keep it as a kinematic puppet (no local gravity
+                // fighting the synced position).
+                if (dropRb != null)
+                {
+                    dropRb.isKinematic = true;
+                    dropRb.useGravity = false;
+                }
+            }
+            else if (dropRb != null)
             {
                 dropRb.isKinematic = false;
                 dropRb.useGravity = true;
