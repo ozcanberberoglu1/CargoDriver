@@ -446,7 +446,6 @@ public class JoinGameController : MonoBehaviourPunCallbacks
             LegoSnap snap = box.GetComponent<LegoSnap>();
             if (snap != null && snap.HasParent)
             {
-                LegoSnap parentSnap = snap.GetRoot();
                 Transform p = box.transform.parent;
                 if (p != null)
                 {

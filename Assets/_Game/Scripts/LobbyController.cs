@@ -66,6 +66,10 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
     private void Awake()
     {
+        // The truck is frozen here, so letting each player simulate the box they carry
+        // costs nothing in consistency and removes the grab round trip entirely.
+        NetworkedCargoBody.Policy = CargoAuthorityPolicy.DistributedOwnership;
+
         FreezePickup();
         SetupAudio();
     }

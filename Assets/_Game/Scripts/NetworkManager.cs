@@ -22,6 +22,11 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         PhotonNetwork.AutomaticallySyncScene = true;
 
+        // Cargo boxes are kinematic puppets on every non-authoritative client, so their
+        // smoothness comes entirely from this rate plus PhotonTransformView interpolation.
+        PhotonNetwork.SendRate = 30;
+        PhotonNetwork.SerializationRate = 20;
+
         if (!PhotonNetwork.IsConnected)
             PhotonNetwork.ConnectUsingSettings();
     }

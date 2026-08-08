@@ -227,6 +227,7 @@ GameObject:
   - component: {fileID: 5667117703686208683}
   - component: {fileID: 7905171300209054132}
   - component: {fileID: 7383877081900501781}
+  - component: {fileID: 4820773156089331602}
   - component: {fileID: 7565924998951726543}
   m_Layer: 0
   m_Name: CargoBox2
@@ -356,9 +357,9 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 1
   m_IsKinematic: 0
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_Constraints: 0
-  m_CollisionDetection: 0
+  m_CollisionDetection: 2
 --- !u!114 &7905171300209054132
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -375,7 +376,7 @@ MonoBehaviour:
   Group: 0
   prefixField: -1
   Synchronization: 3
-  OwnershipTransfer: 0
+  OwnershipTransfer: 1
   observableSearch: 2
   ObservedComponents:
   - {fileID: 7383877081900501781}
@@ -398,6 +399,22 @@ MonoBehaviour:
   m_SynchronizeRotation: 1
   m_SynchronizeScale: 0
   m_UseLocal: 1
+--- !u!114 &4820773156089331602
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5907373038970487393}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4d9e17b2a6f4e3b8d05c7291fa63b40, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkedCargoBody
+  carryStiffness: 12
+  carryRotStiffness: 12
+  predictionSmooth: 0.05
+  maxPredictionError: 1.5
 --- !u!114 &7565924998951726543
 MonoBehaviour:
   m_ObjectHideFlags: 0

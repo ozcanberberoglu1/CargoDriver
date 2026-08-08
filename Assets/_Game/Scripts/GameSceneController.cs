@@ -15,6 +15,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     [Header("Cargo Box Prefabs")]
     [SerializeField] private List<GameObject> cargoBoxPrefabs;
+    [SerializeField] private float cargoMass = 2f;
 
     [Header("Death")]
     [SerializeField] private Collider deadCollider;
@@ -24,9 +25,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     private GameObject spawnedPickup;
     private int currentCheckpointIndex;
-    private List<CargoSnapshot> savedCargoSnapshots = new();
-    private Vector3 savedPickupPos;
-    private Quaternion savedPickupRot;
+    private readonly List<CargoSnapshot> savedCargoSnapshots = new();
     private bool isDead;
 
     [Serializable]
@@ -39,10 +38,15 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     private class CargoSnapshot
     {
-        public Vector3 worldPos;
-        public Quaternion worldRot;
-        public Transform transform;
-        public Transform originalParent;
+        public NetworkedCargoBody body;
+        public Vector3 localPos;
+        public Quaternion localRot;
+    }
+
+    private void Awake()
+    {
+        // The truck moves here, so cargo contacts must be resolved on a single machine.
+        NetworkedCargoBody.Policy = CargoAuthorityPolicy.HostAuthority;
     }
 
     private IEnumerator Start()
@@ -60,16 +64,22 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
         else
         {
-            StartCoroutine(WaitAndSpawnCargo());
+            StartCoroutine(WaitForPickup());
         }
 
         GameObject go = new GameObject("VehicleInteraction_Local");
         go.AddComponent<VehicleInteraction>();
 
+        // Lego groups resolve their parent links over the next few physics steps.
+        yield return new WaitForSeconds(0.5f);
         SaveCargoSnapshot();
     }
 
-    private IEnumerator WaitAndSpawnCargo()
+    /// <summary>
+    /// Non-masters only wait for the networked truck; cargo arrives through PUN
+    /// instantiation, so there is nothing to build locally.
+    /// </summary>
+    private IEnumerator WaitForPickup()
     {
         GameObject pickup = null;
         float waited = 0f;
@@ -85,16 +95,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
         SetupCollisionLayers();
         SetLayerRecursive(pickup, LayerMask.NameToLayer("Vehicle"));
-
-        Transform cargoBoxes = pickup.transform.Find("CargoBoxes");
-        if (cargoBoxes != null)
-        {
-            BoxCollider bc = cargoBoxes.GetComponent<BoxCollider>();
-            if (bc != null)
-                Destroy(bc);
-        }
-
-        SpawnCargoOnPickup(pickup);
+        StripCargoParentCollider(pickup);
     }
 
     private GameObject FindPickupInScene()
@@ -105,6 +106,16 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 return pv.gameObject;
         }
         return GameObject.Find("Pickup(Clone)");
+    }
+
+    private static void StripCargoParentCollider(GameObject pickup)
+    {
+        Transform cargoBoxes = pickup.transform.Find("CargoBoxes");
+        if (cargoBoxes == null) return;
+
+        BoxCollider bc = cargoBoxes.GetComponent<BoxCollider>();
+        if (bc != null)
+            Destroy(bc);
     }
 
     private void Update()
@@ -162,27 +173,28 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         }
     }
 
+    /// <summary>
+    /// Records each box relative to the truck. Stowed boxes are skipped because they are
+    /// lego children and travel with their root.
+    /// </summary>
     private void SaveCargoSnapshot()
     {
         savedCargoSnapshots.Clear();
-
         if (spawnedPickup == null) return;
 
-        savedPickupPos = spawnedPickup.transform.position;
-        savedPickupRot = spawnedPickup.transform.rotation;
+        Transform truck = spawnedPickup.transform;
+        Quaternion invTruckRot = Quaternion.Inverse(truck.rotation);
 
-        var allBoxes = new List<Transform>();
-        foreach (var go in GameObject.FindGameObjectsWithTag("CargoBox"))
-            allBoxes.Add(go.transform);
-
-        foreach (Transform box in allBoxes)
+        foreach (NetworkedCargoBody body in NetworkedCargoBody.All)
         {
+            if (body == null) continue;
+            if (body.State == CargoState.Stowed) continue;
+
             savedCargoSnapshots.Add(new CargoSnapshot
             {
-                worldPos = box.position,
-                worldRot = box.rotation,
-                transform = box,
-                originalParent = box.parent
+                body = body,
+                localPos = truck.InverseTransformPoint(body.transform.position),
+                localRot = invTruckRot * body.transform.rotation
             });
         }
     }
@@ -205,9 +217,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.isKinematic = true;
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true;
         }
 
         spawnedPickup.transform.position = spawnPos;
@@ -221,29 +233,14 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     {
         if (spawnedPickup == null) return;
 
-        CargoPickup.heldByPickup.Clear();
+        Transform truck = spawnedPickup.transform;
 
-        Vector3 posDelta = spawnedPickup.transform.position - savedPickupPos;
-        Quaternion rotDelta = spawnedPickup.transform.rotation * Quaternion.Inverse(savedPickupRot);
-
-        for (int i = 0; i < savedCargoSnapshots.Count; i++)
+        foreach (CargoSnapshot snap in savedCargoSnapshots)
         {
-            var snap = savedCargoSnapshots[i];
-            if (snap.transform == null) continue;
-
-            snap.transform.SetParent(snap.originalParent, true);
-
-            Rigidbody boxRb = snap.transform.GetComponent<Rigidbody>();
-            if (boxRb != null)
-            {
-                boxRb.isKinematic = true;
-                boxRb.linearVelocity = Vector3.zero;
-                boxRb.angularVelocity = Vector3.zero;
-            }
-
-            Vector3 newPos = rotDelta * (snap.worldPos - savedPickupPos) + spawnedPickup.transform.position;
-            snap.transform.position = newPos;
-            snap.transform.rotation = rotDelta * snap.worldRot;
+            if (snap.body == null) continue;
+            snap.body.AuthorityTeleport(
+                truck.TransformPoint(snap.localPos),
+                truck.rotation * snap.localRot);
         }
     }
 
@@ -254,20 +251,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
         if (rb != null)
             rb.isKinematic = false;
-
-        Transform cargoParent = spawnedPickup.transform.Find("CargoBoxes");
-        if (cargoParent == null) yield break;
-
-        foreach (Transform child in cargoParent)
-        {
-            if (!child.name.StartsWith("CargoBox")) continue;
-            Rigidbody boxRb = child.GetComponent<Rigidbody>();
-            if (boxRb != null)
-            {
-                boxRb.isKinematic = false;
-                boxRb.useGravity = true;
-            }
-        }
 
         isDead = false;
     }
@@ -310,13 +293,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (cc != null)
             cc.enabled = true;
 
-        Transform cargoBoxes = pickup.transform.Find("CargoBoxes");
-        if (cargoBoxes != null)
-        {
-            BoxCollider bc = cargoBoxes.GetComponent<BoxCollider>();
-            if (bc != null)
-                Destroy(bc);
-        }
+        StripCargoParentCollider(pickup);
     }
 
     #endregion
@@ -338,7 +315,6 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         string[] parts = data.Split(';');
 
         string[] header = parts[0].Split('|');
-        string[] posStr = header[0].Split(',');
         string[] rotStr = header[1].Split(',');
 
         Quaternion pickupOrigRot = ParseQuat(rotStr[0], rotStr[1], rotStr[2], rotStr[3]);
@@ -358,28 +334,23 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (pv != null && cc != null)
         {
             if (pv.ObservedComponents == null)
-                pv.ObservedComponents = new System.Collections.Generic.List<Component>();
+                pv.ObservedComponents = new List<Component>();
             if (!pv.ObservedComponents.Contains(cc))
                 pv.ObservedComponents.Add(cc);
         }
 
-        SpawnCargoOnPickup(pickup);
+        SpawnCargoOnPickup(pickup, parts);
 
         return pickup;
     }
 
-    private void SpawnCargoOnPickup(GameObject pickup)
+    /// <summary>
+    /// Master-only. Each box is created as a room object so it carries a real ViewID on
+    /// every client, including anyone who joins mid-match.
+    /// </summary>
+    private void SpawnCargoOnPickup(GameObject pickup, string[] parts)
     {
-        var props = PhotonNetwork.CurrentRoom.CustomProperties;
-        if (!props.ContainsKey("cargoData")) return;
-
-        string data = props["cargoData"].ToString();
-        string[] parts = data.Split(';');
-
-        Transform cargoParent = pickup.transform.Find("CargoBoxes");
-
         var spawnedBoxes = new List<GameObject>();
-        var parentIndices = new List<int>();
 
         for (int i = 1; i < parts.Length; i++)
         {
@@ -395,91 +366,53 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
 
-            GameObject prefab = FindCargoPrefab(prefabName);
-            GameObject box;
-            if (prefab != null)
+            // The layout writer emits parents before their children, so a lego parent is
+            // always already spawned and has a ViewID we can reference.
+            int legoParentViewId = -1;
+            if (parentIdx >= 0 && parentIdx < spawnedBoxes.Count)
             {
-                box = Instantiate(prefab, worldPos, worldRot);
+                PhotonView parentView = spawnedBoxes[parentIdx].GetComponent<PhotonView>();
+                if (parentView != null) legoParentViewId = parentView.ViewID;
             }
-            else
+
+            object[] instantiationData =
             {
-                box = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                box.transform.position = worldPos;
-                box.transform.rotation = worldRot;
-            }
+                scale.x, scale.y, scale.z, legoParentViewId
+            };
+
+            GameObject box = PhotonNetwork.InstantiateRoomObject(
+                ResolveCargoPrefabName(prefabName), worldPos, worldRot, 0, instantiationData);
+
+            if (box == null) continue;
 
             box.transform.localScale = scale;
-            box.name = $"CargoBox_{i}";
-            box.tag = "CargoBox";
 
-            if (cargoParent != null)
-                box.transform.SetParent(cargoParent, true);
-
+            // Only the master simulates cargo in this scene, so mass set here is enough.
             Rigidbody rb = box.GetComponent<Rigidbody>();
-            if (rb == null) rb = box.AddComponent<Rigidbody>();
-
-            Collider col = box.GetComponent<Collider>();
-            if (col == null) box.AddComponent<BoxCollider>();
-
-            rb.mass = 2f;
-            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-            if (PhotonNetwork.IsMasterClient)
-            {
-                rb.isKinematic = false;
-                rb.useGravity = true;
-            }
-            else
-            {
-                rb.isKinematic = true;
-                rb.useGravity = false;
-            }
-
-            if (box.GetComponent<CargoAutoParent>() == null)
-                box.AddComponent<CargoAutoParent>();
+            if (rb != null)
+                rb.mass = cargoMass;
 
             spawnedBoxes.Add(box);
-            parentIndices.Add(parentIdx);
-        }
-
-        for (int i = 0; i < spawnedBoxes.Count; i++)
-        {
-            int pIdx = parentIndices[i];
-            if (pIdx < 0 || pIdx >= spawnedBoxes.Count) continue;
-
-            GameObject child = spawnedBoxes[i];
-            GameObject parent = spawnedBoxes[pIdx];
-
-            Rigidbody childRb = child.GetComponent<Rigidbody>();
-            if (childRb != null)
-                Destroy(childRb);
-
-            child.transform.SetParent(parent.transform, true);
-
-            LegoSnap childSnap = child.GetComponent<LegoSnap>();
-            LegoSnap parentSnap = parent.GetComponent<LegoSnap>();
-            if (childSnap != null && parentSnap != null)
-                childSnap.SetParentDirect(parentSnap);
         }
     }
 
     #endregion
 
-    private GameObject FindCargoPrefab(string prefabName)
+    private string ResolveCargoPrefabName(string prefabName)
     {
         if (cargoBoxPrefabs != null && !string.IsNullOrEmpty(prefabName))
         {
             foreach (var p in cargoBoxPrefabs)
             {
                 if (p != null && p.name == prefabName)
-                    return p;
+                    return p.name;
             }
         }
 
         if (cargoBoxPrefabs != null && cargoBoxPrefabs.Count > 0 && cargoBoxPrefabs[0] != null)
-            return cargoBoxPrefabs[0];
+            return cargoBoxPrefabs[0].name;
 
-        return null;
+        return "CargoBox";
     }
 
     #region Parsing

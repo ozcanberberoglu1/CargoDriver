@@ -1,37 +1,45 @@
 using System.Collections.Generic;
-using Photon.Pun;
 using UnityEngine;
-using Hashtable = ExitGames.Client.Photon.Hashtable;
 
-public class LegoSnap : MonoBehaviourPunCallbacks
+/// <summary>
+/// Geometry and local hierarchy bookkeeping for stud-based lego snapping.
+///
+/// This component owns no networking. A snap is expressed as "this box becomes Stowed
+/// under that box with this local pose", which is exactly a <see cref="NetworkedCargoBody"/>
+/// state transition, so replication happens through that single channel.
+/// </summary>
+[RequireComponent(typeof(NetworkedCargoBody))]
+public class LegoSnap : MonoBehaviour
 {
     [Header("Snap Settings")]
     [SerializeField] private float snapDistance = 3f;
     [SerializeField] private float snapDepth = 0.05f;
 
     private static readonly List<LegoSnap> allLegos = new();
-    private static int snapEventCounter;
+    private static readonly HashSet<Collider> usedColliders = new();
 
     private LegoSnap parentLego;
     private readonly List<LegoSnap> childLegos = new();
     private Collider[] snapColliders;
-    private static readonly HashSet<Collider> usedColliders = new();
+
+    private NetworkedCargoBody body;
+
+    public bool HasParent => parentLego != null;
 
     private void Awake()
     {
+        body = GetComponent<NetworkedCargoBody>();
         CacheColliders();
     }
 
-    public override void OnEnable()
+    private void OnEnable()
     {
-        base.OnEnable();
         if (!allLegos.Contains(this))
             allLegos.Add(this);
     }
 
-    public override void OnDisable()
+    private void OnDisable()
     {
-        base.OnDisable();
         allLegos.Remove(this);
     }
 
@@ -56,13 +64,44 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         }
     }
 
-    public bool HasParent => parentLego != null;
+    #region Hierarchy links (driven by NetworkedCargoBody)
 
-    public void SetParentDirect(LegoSnap parent)
+    /// <summary>Called on every client when the body enters Stowed under a lego parent.</summary>
+    public void AttachToParent(LegoSnap parent)
     {
+        if (parent == null || parent == this || parentLego == parent) return;
+
+        ClearParentLink();
+
         parentLego = parent;
-        parent.childLegos.Add(this);
+        if (!parent.childLegos.Contains(this))
+            parent.childLegos.Add(this);
+
+        MarkClosestCollidersUsed(parent);
     }
+
+    /// <summary>Called on every client when the body leaves Stowed.</summary>
+    public void ClearParentLink()
+    {
+        if (parentLego == null) return;
+
+        ReleaseColliders(snapColliders);
+        ReleaseColliders(parentLego.snapColliders);
+
+        parentLego.childLegos.Remove(this);
+        parentLego = null;
+    }
+
+    private static void ReleaseColliders(Collider[] colliders)
+    {
+        if (colliders == null) return;
+        foreach (Collider col in colliders)
+        {
+            if (col != null) usedColliders.Remove(col);
+        }
+    }
+
+    #endregion
 
     #region Snap
 
@@ -83,6 +122,7 @@ public class LegoSnap : MonoBehaviourPunCallbacks
             foreach (LegoSnap other in allLegos)
             {
                 if (other == this) continue;
+                if (other.snapColliders == null) continue;
 
                 foreach (Collider otherCol in other.snapColliders)
                 {
@@ -138,32 +178,17 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         else
             offset.y -= snapDepth;
 
-        snapChild.transform.position += offset;
+        NetworkedCargoBody childBody = snapChild.GetComponent<NetworkedCargoBody>();
+        if (childBody == null) return false;
 
-        snapChild.parentLego = snapParent;
-        snapParent.childLegos.Add(snapChild);
+        Vector3 snappedWorldPos = snapChild.transform.position + offset;
+        Vector3 localPos = snapParent.transform.InverseTransformPoint(snappedWorldPos);
+        Quaternion localRot = Quaternion.Inverse(snapParent.transform.rotation) * snapChild.transform.rotation;
 
-        usedColliders.Add(bestMine);
-        usedColliders.Add(bestOther);
+        childBody.AuthorityStow(snapParent.transform, localPos, localRot);
 
-        Rigidbody rb = snapChild.GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            Destroy(rb);
-        }
-
-        snapChild.transform.SetParent(snapParent.transform, true);
-
-        snapChild.BroadcastSnap(snapParent, snapChild.transform.localPosition, snapChild.transform.localRotation);
         PlaySnapSound();
         return true;
-    }
-
-    private bool SnapSimple_Unused(LegoSnap bestTarget, Collider bestMine, Collider bestOther)
-    {
-        return false;
     }
 
     private bool IsCompatible(Collider a, Collider b)
@@ -173,216 +198,10 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         return aIsTop != bIsTop;
     }
 
-    public void SnapTo(LegoSnap target, Collider myCol, Collider targetCol)
-    {
-        Vector3 offset = targetCol.bounds.center - myCol.bounds.center;
-
-        bool myIsDown = myCol.transform.name.StartsWith("DownCollider");
-        if (myIsDown)
-            offset.y += snapDepth;
-        else
-            offset.y -= snapDepth;
-
-        transform.position += offset;
-
-        parentLego = target;
-        target.childLegos.Add(this);
-
-        usedColliders.Add(myCol);
-        usedColliders.Add(targetCol);
-
-        Rigidbody rb = GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            Destroy(rb);
-        }
-
-        transform.SetParent(target.transform, true);
-    }
-
-    
-
-    #endregion
-
-    #region Detach
-
-    public void DetachFromParent()
-    {
-        if (parentLego == null) return;
-
-        foreach (Collider col in snapColliders)
-        {
-            if (col != null) usedColliders.Remove(col);
-        }
-        if (parentLego != null)
-        {
-            foreach (Collider col in parentLego.snapColliders)
-            {
-                if (col != null) usedColliders.Remove(col);
-            }
-        }
-
-        parentLego.childLegos.Remove(this);
-        parentLego = null;
-
-        transform.SetParent(null, true);
-
-        Rigidbody rb = GetComponent<Rigidbody>();
-        if (rb == null)
-            rb = gameObject.AddComponent<Rigidbody>();
-
-        rb.isKinematic = false;
-        rb.useGravity = true;
-        rb.mass = 2f;
-        rb.linearVelocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
-        rb.linearDamping = 0f;
-        rb.angularDamping = 0.05f;
-        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-        BroadcastDetach();
-    }
-
-    public void DetachAll()
-    {
-        var children = new List<LegoSnap>(childLegos);
-        foreach (LegoSnap child in children)
-        {
-            child.DetachAll();
-            child.DetachFromParent();
-        }
-
-        DetachFromParent();
-    }
-
-    #endregion
-
-    #region Network Sync
-
-    private string GetLegoId()
-    {
-        var pv = GetComponent<PhotonView>();
-        if (pv != null) return $"v{pv.ViewID}";
-        return $"i{GetInstanceID()}";
-    }
-
-    private static LegoSnap FindById(string id)
-    {
-        foreach (var lego in allLegos)
-        {
-            if (lego.GetLegoId() == id) return lego;
-        }
-        return null;
-    }
-
-    public void BroadcastSnap(LegoSnap target, Vector3 localPos, Quaternion localRot)
-    {
-        if (!PhotonNetwork.InRoom) return;
-
-        snapEventCounter++;
-        string myId = GetLegoId();
-        string targetId = target.GetLegoId();
-        string F(float v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        string posRot = $"{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)}";
-
-        PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable
-        {
-            { "legoSnap", $"{myId}|{targetId}|{snapEventCounter}|{posRot}" }
-        });
-    }
-
-    private void BroadcastDetach()
-    {
-        if (!PhotonNetwork.InRoom) return;
-
-        snapEventCounter++;
-        PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable
-        {
-            { "legoDetach", $"{GetLegoId()}|{snapEventCounter}" }
-        });
-    }
-
-    public override void OnRoomPropertiesUpdate(Hashtable changedProps)
-    {
-        if (changedProps.ContainsKey("legoSnap"))
-        {
-            string data = changedProps["legoSnap"].ToString();
-            string[] parts = data.Split('|');
-            if (parts.Length >= 2 && parts[0] == GetLegoId())
-            {
-                LegoSnap target = FindById(parts[1]);
-                if (target != null)
-                {
-                    parentLego = target;
-                    target.childLegos.Add(this);
-
-                    MarkClosestCollidersUsed(target);
-
-                    Rigidbody rb = GetComponent<Rigidbody>();
-                    if (rb != null)
-                    {
-                        rb.linearVelocity = Vector3.zero;
-                        rb.angularVelocity = Vector3.zero;
-                        Destroy(rb);
-                    }
-
-                    transform.SetParent(target.transform, true);
-
-                    if (parts.Length >= 4)
-                    {
-                        string[] pr = parts[3].Split(',');
-                        if (pr.Length >= 7)
-                        {
-                            var ci = System.Globalization.CultureInfo.InvariantCulture;
-                            transform.localPosition = new Vector3(
-                                float.Parse(pr[0], ci), float.Parse(pr[1], ci), float.Parse(pr[2], ci));
-                            transform.localRotation = new Quaternion(
-                                float.Parse(pr[3], ci), float.Parse(pr[4], ci),
-                                float.Parse(pr[5], ci), float.Parse(pr[6], ci));
-                        }
-                    }
-
-                    var ptv = GetComponent<PhotonTransformView>();
-                    if (ptv != null) ptv.enabled = false;
-                    var cbs = GetComponent<CargoBoxSync>();
-                    if (cbs != null) cbs.enabled = false;
-                }
-            }
-        }
-
-        if (changedProps.ContainsKey("legoDetach"))
-        {
-            string data = changedProps["legoDetach"].ToString();
-            string[] parts = data.Split('|');
-            if (parts.Length >= 1 && parts[0] == GetLegoId() && HasParent)
-            {
-                parentLego.childLegos.Remove(this);
-                parentLego = null;
-                transform.SetParent(null, true);
-
-                Rigidbody rb = GetComponent<Rigidbody>();
-                if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
-                rb.isKinematic = false;
-                rb.useGravity = true;
-                rb.mass = 2f;
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-                rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-                var ptv = GetComponent<PhotonTransformView>();
-                if (ptv != null) ptv.enabled = true;
-                var cbs = GetComponent<CargoBoxSync>();
-                if (cbs != null) cbs.enabled = true;
-            }
-        }
-    }
-
-    #endregion
-
     private void MarkClosestCollidersUsed(LegoSnap target)
     {
+        if (snapColliders == null || target.snapColliders == null) return;
+
         float bestDist = float.MaxValue;
         Collider bestMine = null, bestOther = null;
 
@@ -407,6 +226,32 @@ public class LegoSnap : MonoBehaviourPunCallbacks
         if (bestOther != null) usedColliders.Add(bestOther);
     }
 
+    #endregion
+
+    #region Detach
+
+    public void DetachFromParent()
+    {
+        if (parentLego == null) return;
+        if (body != null) body.AuthorityFree();
+    }
+
+    public void DetachAll()
+    {
+        var children = new List<LegoSnap>(childLegos);
+        foreach (LegoSnap child in children)
+        {
+            child.DetachAll();
+            child.DetachFromParent();
+        }
+
+        DetachFromParent();
+    }
+
+    #endregion
+
+    #region Helpers
+
     private void PlaySnapSound()
     {
         LobbyController lobby = FindAnyObjectByType<LobbyController>();
@@ -414,13 +259,9 @@ public class LegoSnap : MonoBehaviourPunCallbacks
             lobby.PlayLegoSnapSound();
     }
 
-    #region Helpers
-
     private bool IsInSameGroup(LegoSnap other)
     {
-        LegoSnap myRoot = GetRoot();
-        LegoSnap otherRoot = other.GetRoot();
-        return myRoot == otherRoot;
+        return GetRoot() == other.GetRoot();
     }
 
     public LegoSnap GetRoot()

@@ -4,9 +4,16 @@ using Photon.Pun;
 using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Controls;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
+/// <summary>
+/// Co-op vehicle control. Every player owns a single key; their input is relayed to the
+/// master, which is the only client that simulates the truck. Non-masters move a kinematic
+/// copy toward the replicated pose.
+///
+/// Cargo is deliberately not part of this stream: each box carries its own PhotonView and
+/// is replicated by <see cref="NetworkedCargoBody"/>.
+/// </summary>
 public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 {
     public float enginePower = 2000.0f;
@@ -18,17 +25,18 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
     public Transform centerOfMass;
     public GameObject steeringWheel;
 
+    [Header("Remote Smoothing")]
+    [SerializeField] private float positionSmoothTime = 0.06f;
+    [SerializeField] private float rotationLerpSpeed = 20f;
+    [SerializeField] private float teleportDistance = 10f;
+
     private Rigidbody rb;
     private float currentTurnAngle;
 
-    private Transform[] cargoBoxTransforms;
-
     private Vector3 targetPos;
     private Quaternion targetRot;
+    private Vector3 targetVelocity;
     private Vector3 carSmoothVel;
-    private Vector3[] cargoTargetPos;
-    private Quaternion[] cargoTargetRot;
-    private Vector3[] cargoSmoothVel;
     private float wheelSpin;
 
     private const byte INPUT_EVENT = 42;
@@ -46,62 +54,17 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 
         if (rb != null)
         {
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
             targetPos = rb.position;
             targetRot = rb.rotation;
         }
 
-        PhotonNetwork.SendRate = 60;
-        PhotonNetwork.SerializationRate = 60;
-
-        if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient)
+        if (PhotonNetwork.InRoom && !PhotonNetwork.IsMasterClient && rb != null)
         {
             rb.isKinematic = true;
             foreach (WheelCollider wc in GetComponentsInChildren<WheelCollider>())
                 wc.enabled = false;
         }
-
-        StartCoroutine(FindCargoBoxes());
-    }
-
-    private System.Collections.IEnumerator FindCargoBoxes()
-    {
-        yield return new WaitForSeconds(3f);
-
-        var list = new List<Transform>();
-        foreach (Transform child in transform)
-            FindCargoRecursive(child, list);
-
-        cargoBoxTransforms = list.ToArray();
-        int n = cargoBoxTransforms.Length;
-        cargoTargetPos = new Vector3[n];
-        cargoTargetRot = new Quaternion[n];
-        cargoSmoothVel = new Vector3[n];
-
-        for (int i = 0; i < n; i++)
-        {
-            if (cargoBoxTransforms[i] == null) continue;
-            cargoTargetPos[i] = cargoBoxTransforms[i].position;
-            cargoTargetRot[i] = cargoBoxTransforms[i].rotation;
-        }
-
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            foreach (var t in cargoBoxTransforms)
-            {
-                if (t == null) continue;
-                LegoSnap snap = t.GetComponent<LegoSnap>();
-                if (snap != null && snap.HasParent) continue;
-                t.SetParent(null, true);
-            }
-        }
-    }
-
-    private void FindCargoRecursive(Transform t, List<Transform> list)
-    {
-        if (t.name.StartsWith("CargoBox"))
-            list.Add(t);
-        foreach (Transform child in t)
-            FindCargoRecursive(child, list);
     }
 
     void OnEnable() => PhotonNetwork.AddCallbackTarget(this);
@@ -125,22 +88,43 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             bool brake = false;
             GatherAllInput(ref v, ref h, ref brake);
             RunPhysics(v, h, brake);
+            return;
         }
+
+        ApplyRemotePose();
+    }
+
+    /// <summary>
+    /// Moves the kinematic copy through the physics engine rather than writing the
+    /// transform directly. Physics.autoSyncTransforms is off in this project, so a raw
+    /// transform write would leave the truck's colliders (and anything resting on them)
+    /// a frame behind.
+    /// </summary>
+    private void ApplyRemotePose()
+    {
+        if (Vector3.Distance(rb.position, targetPos) > teleportDistance)
+        {
+            carSmoothVel = Vector3.zero;
+            rb.position = targetPos;
+            rb.rotation = targetRot;
+            return;
+        }
+
+        Vector3 next = Vector3.SmoothDamp(rb.position, targetPos, ref carSmoothVel,
+            positionSmoothTime, Mathf.Infinity, Time.fixedDeltaTime);
+
+        rb.MovePosition(next);
+        rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRot, Time.fixedDeltaTime * rotationLerpSpeed));
     }
 
     void Update()
     {
         if (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient) return;
 
-        float smooth = 0.04f;
-        transform.position = Vector3.SmoothDamp(transform.position, targetPos, ref carSmoothVel, smooth);
-        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 25f);
-
         if (steeringWheel != null)
             steeringWheel.transform.localEulerAngles = new Vector3(-64, 0, currentTurnAngle * 3);
 
-        float speed = carSmoothVel.magnitude;
-        wheelSpin += speed * Time.deltaTime * 60f;
+        wheelSpin += targetVelocity.magnitude * Time.deltaTime * 60f;
 
         for (int i = 0; i < wheelMeshes.Length && i < wheels.Length; i++)
         {
@@ -153,28 +137,6 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
 
             wheelMeshes[i].rotation = transform.rotation * steer * spin;
         }
-
-        if (!PhotonNetwork.IsMasterClient && cargoBoxTransforms != null && cargoTargetPos != null)
-        {
-            int count = Mathf.Min(cargoBoxTransforms.Length, cargoTargetPos.Length);
-            for (int i = 0; i < count; i++)
-            {
-                if (cargoBoxTransforms[i] == null) continue;
-                if (CargoPickup.heldByPickup.Contains(cargoBoxTransforms[i])) continue;
-                if (droppedTrackingActive(cargoBoxTransforms[i])) continue;
-                cargoBoxTransforms[i].position = cargoTargetPos[i];
-                cargoBoxTransforms[i].rotation = cargoTargetRot[i];
-            }
-        }
-    }
-
-    private bool droppedTrackingActive(Transform t)
-    {
-        foreach (var pickup in FindObjectsByType<CargoPickup>(FindObjectsSortMode.None))
-        {
-            if (pickup.recentlyDroppedTransform == t) return true;
-        }
-        return false;
     }
 
     #region Input
@@ -322,50 +284,14 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
             stream.SendNext(rb.position);
             stream.SendNext(rb.rotation);
             stream.SendNext(currentTurnAngle);
-
-            int boxCount = cargoBoxTransforms != null ? cargoBoxTransforms.Length : 0;
-            stream.SendNext(boxCount);
-            for (int i = 0; i < boxCount; i++)
-            {
-                if (cargoBoxTransforms[i] != null)
-                {
-                    stream.SendNext(cargoBoxTransforms[i].position);
-                    stream.SendNext(cargoBoxTransforms[i].rotation);
-                }
-                else
-                {
-                    stream.SendNext(Vector3.zero);
-                    stream.SendNext(Quaternion.identity);
-                }
-            }
+            stream.SendNext(rb.linearVelocity);
         }
         else
         {
-            Vector3 newPos = (Vector3)stream.ReceiveNext();
-
-            if (Vector3.Distance(targetPos, newPos) > 10f)
-            {
-                transform.position = newPos;
-                carSmoothVel = Vector3.zero;
-            }
-
-            targetPos = newPos;
+            targetPos = (Vector3)stream.ReceiveNext();
             targetRot = (Quaternion)stream.ReceiveNext();
             currentTurnAngle = (float)stream.ReceiveNext();
-
-            int boxCount = (int)stream.ReceiveNext();
-            if (cargoTargetPos == null || cargoTargetPos.Length != boxCount)
-            {
-                cargoTargetPos = new Vector3[boxCount];
-                cargoTargetRot = new Quaternion[boxCount];
-                cargoSmoothVel = new Vector3[boxCount];
-            }
-
-            for (int i = 0; i < boxCount; i++)
-            {
-                cargoTargetPos[i] = (Vector3)stream.ReceiveNext();
-                cargoTargetRot[i] = (Quaternion)stream.ReceiveNext();
-            }
+            targetVelocity = (Vector3)stream.ReceiveNext();
         }
     }
 
