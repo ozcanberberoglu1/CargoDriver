@@ -48,6 +48,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         // The truck moves here, so cargo contacts must be resolved on a single machine.
         NetworkedCargoBody.Policy = CargoAuthorityPolicy.HostAuthority;
         NetworkedCargoBody.ReferenceFrame = null;
+        NetworkedCargoBody.PreventSleep = true;
     }
 
     private IEnumerator Start()
@@ -257,6 +258,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (rb != null)
             rb.isKinematic = false;
 
+        NetworkedCargoBody.WakeAll();
         isDead = false;
     }
 
@@ -299,6 +301,12 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             cc.enabled = true;
 
         StripCargoParentCollider(pickup);
+
+        // The truck drops onto its suspension the moment it goes dynamic, so the cargo has
+        // to be awake to follow the bed down instead of being left hanging above it.
+        NetworkedCargoBody.WakeAll();
+        yield return new WaitForSeconds(0.5f);
+        NetworkedCargoBody.WakeAll();
     }
 
     #endregion

@@ -59,6 +59,13 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     /// </summary>
     public static Transform ReferenceFrame;
 
+    /// <summary>
+    /// Set while cargo rides a vehicle. A settled box otherwise falls asleep on the bed,
+    /// and a sleeping body ignores the bed moving out from under it, so it hangs in the
+    /// air until something bumps it awake.
+    /// </summary>
+    public static bool PreventSleep;
+
     private static readonly List<NetworkedCargoBody> all = new();
     private static readonly Dictionary<int, NetworkedCargoBody> heldByActor = new();
 
@@ -104,6 +111,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private float lastOwnershipClaim = -99f;
 
     private const float ownershipClaimCooldown = 0.5f;
+    private const float defaultSleepThreshold = 0.005f;
 
     public CargoState State => state;
     public int HolderActor => holderActor;
@@ -139,6 +147,16 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     {
         body.interpolation = RigidbodyInterpolation.Interpolate;
         body.maxDepenetrationVelocity = 1f;
+    }
+
+    /// <summary>Rouses every simulated box, for when the ground under them just moved.</summary>
+    public static void WakeAll()
+    {
+        foreach (NetworkedCargoBody body in all)
+        {
+            if (body != null && body.rb != null && !body.rb.isKinematic)
+                body.rb.WakeUp();
+        }
     }
 
     public override void OnEnable()
@@ -274,6 +292,9 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             rb.isKinematic = false;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            // Set here rather than at construction because scene objects have no ordering
+            // guarantee against the controller that decides the policy.
+            rb.sleepThreshold = PreventSleep ? 0f : defaultSleepThreshold;
             rb.useGravity = true;
             rb.linearDamping = state == CargoState.Held ? 12f : 0f;
             rb.angularDamping = state == CargoState.Held ? 8f : 0.05f;
