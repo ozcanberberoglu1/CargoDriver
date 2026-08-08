@@ -70,6 +70,9 @@ public class LobbyController : MonoBehaviourPunCallbacks
         // costs nothing in consistency and removes the grab round trip entirely.
         NetworkedCargoBody.Policy = CargoAuthorityPolicy.DistributedOwnership;
 
+        // Nothing moves under the cargo in the lobby, so world space is the right frame.
+        NetworkedCargoBody.ReferenceFrame = null;
+
         FreezePickup();
         SetupAudio();
     }

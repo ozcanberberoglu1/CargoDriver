@@ -41,6 +41,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     [Header("Carry Servo")]
     [SerializeField] private float carryStiffness = 12f;
     [SerializeField] private float carryRotStiffness = 12f;
+    [SerializeField] private float maxThrowSpeed = 14f;
 
     [Header("Client Prediction")]
     [SerializeField] private float predictionSmooth = 0.05f;
@@ -49,6 +50,14 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     [Header("Remote Smoothing")]
     [SerializeField] private float maxExtrapolation = 0.3f;
     [SerializeField] private float teleportDistance = 4f;
+
+    /// <summary>
+    /// Moving platform that cargo poses are expressed against, set to the truck in the
+    /// game scene and left null in the lobby. Streaming world poses while the truck drives
+    /// makes every box inherit the truck's own interpolation error, which is what the
+    /// cargo shivering on the bed actually is.
+    /// </summary>
+    public static Transform ReferenceFrame;
 
     private static readonly List<NetworkedCargoBody> all = new();
     private static readonly Dictionary<int, NetworkedCargoBody> heldByActor = new();
@@ -68,8 +77,13 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private int holderActor = -1;
     private Transform carrier;
 
+    private static Transform frameBodyFor;
+    private static Rigidbody frameBody;
+
     private Vector3 holdTargetPos;
     private Quaternion holdTargetRot = Quaternion.identity;
+    private Vector3 holdTargetVel;
+    private float holdTargetTime;
     private bool hasHoldTarget;
 
     private Vector3 predictionVel;
@@ -81,8 +95,15 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private bool hasNetPose;
     private bool snapNextPose;
 
+    private Vector3 smoothLocalPos;
+    private Quaternion smoothLocalRot = Quaternion.identity;
+    private bool hasSmoothPose;
+
     private int pendingCarrierViewId = -1;
     private float pendingCarrierTimeout;
+    private float lastOwnershipClaim = -99f;
+
+    private const float ownershipClaimCooldown = 0.5f;
 
     public CargoState State => state;
     public int HolderActor => holderActor;
@@ -188,6 +209,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         state = newState;
         holderActor = newHolderActor;
         hasHoldTarget = false;
+        holdTargetVel = Vector3.zero;
         hasNetPose = false;
         snapNextPose = true;
         predictionVel = Vector3.zero;
@@ -250,6 +272,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         if (writer)
         {
             rb.isKinematic = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             rb.useGravity = true;
             rb.linearDamping = state == CargoState.Held ? 12f : 0f;
@@ -262,6 +285,12 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             rb.isKinematic = true;
             rb.useGravity = false;
+
+            // In a moving frame LateUpdate writes the transform every frame, so PhysX
+            // interpolation would only be undone a moment later.
+            rb.interpolation = ReferenceFrame != null
+                ? RigidbodyInterpolation.None
+                : RigidbodyInterpolation.Interpolate;
         }
     }
 
@@ -308,6 +337,34 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         if (rb == null || rb.isKinematic) return;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
+    }
+
+    private static Vector3 WorldToFramePoint(Vector3 world)
+        => ReferenceFrame != null ? ReferenceFrame.InverseTransformPoint(world) : world;
+
+    private static Vector3 FrameToWorldPoint(Vector3 local)
+        => ReferenceFrame != null ? ReferenceFrame.TransformPoint(local) : local;
+
+    private static Quaternion WorldToFrameRotation(Quaternion world)
+        => ReferenceFrame != null ? Quaternion.Inverse(ReferenceFrame.rotation) * world : world;
+
+    private static Quaternion FrameToWorldRotation(Quaternion local)
+        => ReferenceFrame != null ? ReferenceFrame.rotation * local : local;
+
+    /// <summary>Velocity relative to the reference frame, expressed in frame space.</summary>
+    private Vector3 FrameRelativeVelocity()
+    {
+        if (rb == null || rb.isKinematic) return Vector3.zero;
+        if (ReferenceFrame == null) return rb.linearVelocity;
+
+        if (frameBodyFor != ReferenceFrame)
+        {
+            frameBodyFor = ReferenceFrame;
+            frameBody = ReferenceFrame.GetComponent<Rigidbody>();
+        }
+
+        Vector3 frameVel = frameBody != null ? frameBody.GetPointVelocity(rb.position) : Vector3.zero;
+        return ReferenceFrame.InverseTransformDirection(rb.linearVelocity - frameVel);
     }
 
     private static Transform ResolveView(int viewId)
@@ -390,12 +447,11 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
         if (Policy == CargoAuthorityPolicy.DistributedOwnership)
         {
+            // Ownership deliberately stays with the thrower. Handing it back here would
+            // make the box a puppet mid-flight and yank it to the previous owner's
+            // lagging copy, which reads as the box falling, snapping back and falling again.
             photonView.RPC(nameof(RpcApplyState), RpcTarget.All,
                 (int)CargoState.Free, -1, -1, Vector3.zero, Quaternion.identity, false);
-
-            // Hand the body back so the master owns settled cargo again.
-            if (photonView.IsMine && PhotonNetwork.MasterClient != null)
-                photonView.TransferOwnership(PhotonNetwork.MasterClient);
             return;
         }
 
@@ -417,6 +473,17 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     /// <summary>Holder feeds the desired hand pose; the writer servos the body toward it.</summary>
     public void SetHoldTarget(Vector3 worldPos, Quaternion worldRot)
     {
+        // The hand's own speed is tracked so the servo can carry it as a feed forward term.
+        // Without it the servo converges on the hand and the box leaves the player's grip
+        // with almost no velocity, so it drops straight down instead of being thrown.
+        if (hasHoldTarget)
+        {
+            float dt = Time.time - holdTargetTime;
+            if (dt > 0.0001f)
+                holdTargetVel = Vector3.Lerp(holdTargetVel, (worldPos - holdTargetPos) / dt, 0.5f);
+        }
+
+        holdTargetTime = Time.time;
         holdTargetPos = worldPos;
         holdTargetRot = worldRot;
         hasHoldTarget = true;
@@ -433,8 +500,17 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
         ApplyBodyMode();
 
-        if (state == CargoState.Held && IsWriter && hasHoldTarget && rb != null)
-            DriveHeldBody();
+        if (state == CargoState.Stowed || rb == null) return;
+
+        if (IsWriter)
+        {
+            if (state == CargoState.Held && hasHoldTarget)
+                DriveHeldBody();
+        }
+        else if (hasNetPose)
+        {
+            DriveRemotePose();
+        }
     }
 
     /// <summary>
@@ -444,7 +520,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private void DriveHeldBody()
     {
         Vector3 diff = holdTargetPos - rb.position;
-        rb.linearVelocity = diff * carryStiffness;
+        rb.linearVelocity = diff * carryStiffness + Vector3.ClampMagnitude(holdTargetVel, maxThrowSpeed);
 
         Quaternion delta = holdTargetRot * Quaternion.Inverse(rb.rotation);
         delta.ToAngleAxis(out float angle, out Vector3 axis);
@@ -456,30 +532,52 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             rb.angularVelocity = Vector3.zero;
     }
 
-    private void Update()
-    {
-        ApplyRemotePose();
-    }
-
     /// <summary>
-    /// Drives the puppet copy toward the writer's stream. Stowed boxes are skipped: their
-    /// carrier already places them, and they produce no traffic at all.
+    /// Drives the puppet copy toward the writer's stream.
+    ///
+    /// Two details matter here. The smoothing runs in the reference frame, so a box riding
+    /// the truck converges on a target that is standing still in truck space and then sits
+    /// perfectly on the bed however fast the truck drives. And the move goes through the
+    /// rigidbody rather than the transform, so the puppet sweeps and can shove dynamic
+    /// bodies out of the way instead of teleporting into them.
     /// </summary>
-    private void ApplyRemotePose()
+    private void DriveRemotePose()
     {
-        if (state == CargoState.Stowed || IsWriter || !hasNetPose) return;
+        // The smoothed pose is kept here rather than read back off the transform, so the
+        // holder's local prediction can move the box for rendering without feeding its
+        // own guess back into the correction.
+        bool snap = snapNextPose || !hasSmoothPose ||
+                    Vector3.Distance(smoothLocalPos, netPos) > teleportDistance;
 
-        if (snapNextPose || Vector3.Distance(transform.position, netPos) > teleportDistance)
+        if (snap)
         {
-            transform.position = netPos;
-            transform.rotation = netRot;
             snapNextPose = false;
+            hasSmoothPose = true;
+            smoothLocalPos = netPos;
+            smoothLocalRot = netRot;
+        }
+        else
+        {
+            float step = Mathf.Clamp01(Time.fixedDeltaTime * PhotonNetwork.SerializationRate);
+            smoothLocalPos = Vector3.Lerp(smoothLocalPos, netPos, step);
+            smoothLocalRot = Quaternion.Slerp(smoothLocalRot, netRot, step);
+        }
+
+        // With a moving frame the placement is deferred to LateUpdate, where the truck has
+        // already been interpolated for this frame. Reading it here instead would pin the
+        // box to the truck's previous physics step, which at speed is a visible slide.
+        if (ReferenceFrame != null) return;
+
+        if (snap)
+        {
+            rb.position = smoothLocalPos;
+            rb.rotation = smoothLocalRot;
+            transform.SetPositionAndRotation(smoothLocalPos, smoothLocalRot);
             return;
         }
 
-        float step = Mathf.Clamp01(Time.deltaTime * PhotonNetwork.SerializationRate);
-        transform.position = Vector3.Lerp(transform.position, netPos, step);
-        transform.rotation = Quaternion.Slerp(transform.rotation, netRot, step);
+        rb.MovePosition(smoothLocalPos);
+        rb.MoveRotation(smoothLocalRot);
     }
 
     /// <summary>
@@ -489,6 +587,8 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     /// </summary>
     private void LateUpdate()
     {
+        PlaceInMovingFrame();
+
         if (state != CargoState.Held) return;
         if (IsWriter || !IsHeldByLocalPlayer || !hasHoldTarget) return;
 
@@ -499,6 +599,41 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             predicted = authoritative + Vector3.ClampMagnitude(predicted - authoritative, maxPredictionError);
 
         transform.position = Vector3.SmoothDamp(authoritative, predicted, ref predictionVel, predictionSmooth);
+    }
+
+    /// <summary>
+    /// Pins a puppet onto the truck using the pose the truck is actually being rendered at
+    /// this frame. That is what makes cargo sit still on a bed doing 20 m/s: the box and
+    /// the truck now carry the exact same interpolation error instead of two different ones.
+    /// </summary>
+    private void PlaceInMovingFrame()
+    {
+        if (ReferenceFrame == null || rb == null) return;
+        if (state == CargoState.Stowed || IsWriter || !hasSmoothPose) return;
+
+        transform.SetPositionAndRotation(
+            FrameToWorldPoint(smoothLocalPos),
+            FrameToWorldRotation(smoothLocalRot));
+    }
+
+    /// <summary>
+    /// Only the machine that owns a body simulates it, so every other box is a puppet here
+    /// and a carried box would just scrape along them. Claiming a box the moment we touch
+    /// it hands us its simulation, which is what makes cargo shove and topple cargo.
+    /// </summary>
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (Policy != CargoAuthorityPolicy.DistributedOwnership) return;
+        if (state != CargoState.Held || !IsWriter || !IsHeldByLocalPlayer) return;
+        if (collision.rigidbody == null) return;
+
+        NetworkedCargoBody other = collision.rigidbody.GetComponent<NetworkedCargoBody>();
+        if (other == null || other == this) return;
+        if (other.state != CargoState.Free || other.photonView.IsMine) return;
+        if (Time.time - other.lastOwnershipClaim < ownershipClaimCooldown) return;
+
+        other.lastOwnershipClaim = Time.time;
+        other.photonView.TransferOwnership(PhotonNetwork.LocalPlayer);
     }
 
     private void ResolvePendingCarrier()
@@ -529,13 +664,15 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             bool sendPose = state != CargoState.Stowed;
 
             stream.SendNext((int)state);
-            stream.SendNext(sendPose ? transform.position : Vector3.zero);
-            stream.SendNext(sendPose ? transform.rotation : Quaternion.identity);
-            stream.SendNext(sendPose && rb != null && !rb.isKinematic ? rb.linearVelocity : Vector3.zero);
+            stream.SendNext(ReferenceFrame != null);
+            stream.SendNext(sendPose ? WorldToFramePoint(transform.position) : Vector3.zero);
+            stream.SendNext(sendPose ? WorldToFrameRotation(transform.rotation) : Quaternion.identity);
+            stream.SendNext(sendPose ? FrameRelativeVelocity() : Vector3.zero);
         }
         else
         {
             int remoteState = (int)stream.ReceiveNext();
+            bool remoteHasFrame = (bool)stream.ReceiveNext();
             Vector3 pos = (Vector3)stream.ReceiveNext();
             Quaternion rot = (Quaternion)stream.ReceiveNext();
             Vector3 vel = (Vector3)stream.ReceiveNext();
@@ -545,6 +682,10 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             // State travels by reliable RPC while poses are unreliable, so a packet from
             // before the last transition can still land. Its pose is meaningless now.
             if (remoteState != (int)state || state == CargoState.Stowed) return;
+
+            // Same reasoning for the frame: a pose in truck space is nonsense until we
+            // have resolved the truck ourselves.
+            if (remoteHasFrame != (ReferenceFrame != null)) return;
 
             float lag = Mathf.Clamp((float)(PhotonNetwork.Time - info.SentServerTime), 0f, maxExtrapolation);
             netPos = pos + vel * lag;
@@ -583,10 +724,15 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private void RpcTeleport(Vector3 worldPos, Quaternion worldRot)
     {
         ZeroVelocities();
-        transform.position = worldPos;
-        transform.rotation = worldRot;
-        netPos = worldPos;
-        netRot = worldRot;
+        transform.SetPositionAndRotation(worldPos, worldRot);
+        if (rb != null && rb.isKinematic)
+        {
+            rb.position = worldPos;
+            rb.rotation = worldRot;
+        }
+
+        netPos = WorldToFramePoint(worldPos);
+        netRot = WorldToFrameRotation(worldRot);
         snapNextPose = true;
     }
 

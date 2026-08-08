@@ -47,6 +47,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     {
         // The truck moves here, so cargo contacts must be resolved on a single machine.
         NetworkedCargoBody.Policy = CargoAuthorityPolicy.HostAuthority;
+        NetworkedCargoBody.ReferenceFrame = null;
     }
 
     private IEnumerator Start()
@@ -60,7 +61,10 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         {
             spawnedPickup = SpawnPickupWithCargo();
             if (spawnedPickup != null)
+            {
+                NetworkedCargoBody.ReferenceFrame = spawnedPickup.transform;
                 StartCoroutine(EnableCarPhysics(spawnedPickup));
+            }
         }
         else
         {
@@ -92,6 +96,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         if (pickup == null) yield break;
 
         spawnedPickup = pickup;
+        NetworkedCargoBody.ReferenceFrame = pickup.transform;
 
         SetupCollisionLayers();
         SetLayerRecursive(pickup, LayerMask.NameToLayer("Vehicle"));
