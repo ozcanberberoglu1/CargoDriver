@@ -387,10 +387,11 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
             box.transform.localScale = scale;
 
-            // Only the master simulates cargo in this scene, so mass set here is enough.
-            Rigidbody rb = box.GetComponent<Rigidbody>();
-            if (rb != null)
-                rb.mass = cargoMass;
+            // Goes through the body so the mass survives the rigidbody being dropped and
+            // rebuilt when the box is welded into a lego structure and later detached.
+            NetworkedCargoBody body = box.GetComponent<NetworkedCargoBody>();
+            if (body != null)
+                body.SetMass(cargoMass);
 
             spawnedBoxes.Add(box);
         }

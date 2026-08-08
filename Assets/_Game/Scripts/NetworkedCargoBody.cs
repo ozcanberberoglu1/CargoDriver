@@ -21,21 +21,20 @@ public enum CargoState
     /// <summary>Carried by a player. Writer depends on the active authority policy.</summary>
     Held = 1,
 
-    /// <summary>Kinematic and parented to a carrier. No independent simulation.</summary>
+    /// <summary>Welded into a carrier's compound collider. No rigidbody of its own.</summary>
     Stowed = 2
 }
 
 /// <summary>
 /// Single source of truth for a cargo box's networked physics state.
 ///
-/// The whole cargo system rests on one invariant: every body has exactly one writer
-/// at any moment. The writer runs real PhysX; everybody else is a kinematic puppet fed
-/// by PhotonTransformView. Nothing outside this component may touch isKinematic,
-/// useGravity or the transform parent of a cargo box.
+/// The whole cargo system rests on one invariant: every body has exactly one writer at
+/// any moment. The writer runs real PhysX; everybody else is a puppet driven by this
+/// component's own transform stream. Nothing outside this component may touch the
+/// rigidbody, isKinematic, useGravity or the transform parent of a cargo box.
 /// </summary>
-[RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(PhotonView))]
-public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagicCallback
+public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagicCallback, IPunObservable
 {
     public static CargoAuthorityPolicy Policy = CargoAuthorityPolicy.HostAuthority;
 
@@ -47,6 +46,10 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     [SerializeField] private float predictionSmooth = 0.05f;
     [SerializeField] private float maxPredictionError = 1.5f;
 
+    [Header("Remote Smoothing")]
+    [SerializeField] private float maxExtrapolation = 0.3f;
+    [SerializeField] private float teleportDistance = 4f;
+
     private static readonly List<NetworkedCargoBody> all = new();
     private static readonly Dictionary<int, NetworkedCargoBody> heldByActor = new();
 
@@ -55,9 +58,11 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     public static NetworkedCargoBody HeldBy(int actorNumber)
         => heldByActor.TryGetValue(actorNumber, out NetworkedCargoBody body) ? body : null;
 
+    /// <summary>Null while Stowed: the box is then part of its carrier's compound collider.</summary>
     private Rigidbody rb;
-    private PhotonTransformView transformView;
     private LegoSnap legoSnap;
+
+    private float bodyMass = 1f;
 
     private CargoState state = CargoState.Free;
     private int holderActor = -1;
@@ -70,6 +75,11 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private Vector3 predictionVel;
     private bool bodyModeIsWriter;
     private bool bodyModeInitialized;
+
+    private Vector3 netPos;
+    private Quaternion netRot = Quaternion.identity;
+    private bool hasNetPose;
+    private bool snapNextPose;
 
     private int pendingCarrierViewId = -1;
     private float pendingCarrierTimeout;
@@ -89,11 +99,25 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        transformView = GetComponent<PhotonTransformView>();
         legoSnap = GetComponent<LegoSnap>();
 
-        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            bodyMass = rb.mass;
+            ConfigureBody(rb);
+        }
+    }
+
+    /// <summary>
+    /// Capping depenetration is what keeps cargo from launching the truck. A box that ends
+    /// up overlapping something is otherwise pushed out at whatever speed it takes to clear
+    /// the overlap in one step, and that impulse goes straight into whatever it is resting on.
+    /// </summary>
+    private void ConfigureBody(Rigidbody body)
+    {
+        body.interpolation = RigidbodyInterpolation.Interpolate;
+        body.maxDepenetrationVelocity = 1f;
     }
 
     public override void OnEnable()
@@ -132,6 +156,13 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         }
     }
 
+    /// <summary>Only meaningful on the writer, which is the machine that simulates this body.</summary>
+    public void SetMass(float mass)
+    {
+        bodyMass = mass;
+        if (rb != null) rb.mass = mass;
+    }
+
     #endregion
 
     #region State machine
@@ -157,16 +188,20 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         state = newState;
         holderActor = newHolderActor;
         hasHoldTarget = false;
+        hasNetPose = false;
+        snapNextPose = true;
         predictionVel = Vector3.zero;
 
         switch (state)
         {
             case CargoState.Stowed:
-                ZeroVelocities();
-                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-                rb.isKinematic = true;
-                rb.useGravity = false;
-                transform.SetParent(carrier, !hasPose);
+                // The rigidbody has to go, not just turn kinematic: a child that keeps its
+                // own body stays a separate solver island, so the deliberate stud overlap
+                // becomes a penetration the solver fights every step and pushes into
+                // whatever the structure is resting on. Without it the colliders fold into
+                // the carrier's compound and the overlap costs nothing.
+                RemoveRigidbody();
+                transform.SetParent(carrier, true);
                 if (hasPose)
                 {
                     transform.localPosition = localPos;
@@ -178,6 +213,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             case CargoState.Held:
                 transform.SetParent(null, true);
                 LinkLegoParent(false);
+                EnsureRigidbody();
                 if (holderActor >= 0)
                     heldByActor[holderActor] = this;
                 break;
@@ -185,11 +221,11 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             case CargoState.Free:
                 transform.SetParent(null, true);
                 LinkLegoParent(false);
+                EnsureRigidbody();
                 break;
         }
 
         ApplyBodyMode(force: true);
-        ResetTransformView();
     }
 
     /// <summary>
@@ -198,7 +234,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     /// </summary>
     private void ApplyBodyMode(bool force = false)
     {
-        if (state == CargoState.Stowed)
+        if (state == CargoState.Stowed || rb == null)
         {
             bodyModeIsWriter = false;
             bodyModeInitialized = true;
@@ -229,6 +265,28 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         }
     }
 
+    private void EnsureRigidbody()
+    {
+        if (rb != null) return;
+
+        rb = GetComponent<Rigidbody>();
+        if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
+
+        rb.mass = bodyMass;
+        ConfigureBody(rb);
+        bodyModeInitialized = false;
+    }
+
+    private void RemoveRigidbody()
+    {
+        if (rb == null) return;
+
+        ZeroVelocities();
+        Destroy(rb);
+        rb = null;
+        bodyModeInitialized = false;
+    }
+
     private void LinkLegoParent(bool link)
     {
         if (legoSnap == null) return;
@@ -245,21 +303,9 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         }
     }
 
-    /// <summary>
-    /// Forces PhotonTransformView to re-seed from the next packet. Its cached network
-    /// position is expressed in the old parent space and would otherwise drag the box
-    /// across the level after a re-parent.
-    /// </summary>
-    private void ResetTransformView()
-    {
-        if (transformView == null || !transformView.enabled) return;
-        transformView.enabled = false;
-        transformView.enabled = true;
-    }
-
     private void ZeroVelocities()
     {
-        if (rb.isKinematic) return;
+        if (rb == null || rb.isKinematic) return;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
     }
@@ -282,7 +328,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
     #region Authority commands
 
-    /// <summary>Master/owner puts this box into the carrier's local frame as a kinematic child.</summary>
+    /// <summary>Master/owner welds this box into the carrier's local frame.</summary>
     public void AuthorityStow(Transform newCarrier, Vector3 localPos, Quaternion localRot)
     {
         int carrierViewId = ViewIdOf(newCarrier);
@@ -387,7 +433,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
         ApplyBodyMode();
 
-        if (state == CargoState.Held && IsWriter && hasHoldTarget)
+        if (state == CargoState.Held && IsWriter && hasHoldTarget && rb != null)
             DriveHeldBody();
     }
 
@@ -408,6 +454,32 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             rb.angularVelocity = axis.normalized * (angle * Mathf.Deg2Rad * carryRotStiffness);
         else
             rb.angularVelocity = Vector3.zero;
+    }
+
+    private void Update()
+    {
+        ApplyRemotePose();
+    }
+
+    /// <summary>
+    /// Drives the puppet copy toward the writer's stream. Stowed boxes are skipped: their
+    /// carrier already places them, and they produce no traffic at all.
+    /// </summary>
+    private void ApplyRemotePose()
+    {
+        if (state == CargoState.Stowed || IsWriter || !hasNetPose) return;
+
+        if (snapNextPose || Vector3.Distance(transform.position, netPos) > teleportDistance)
+        {
+            transform.position = netPos;
+            transform.rotation = netRot;
+            snapNextPose = false;
+            return;
+        }
+
+        float step = Mathf.Clamp01(Time.deltaTime * PhotonNetwork.SerializationRate);
+        transform.position = Vector3.Lerp(transform.position, netPos, step);
+        transform.rotation = Quaternion.Slerp(transform.rotation, netRot, step);
     }
 
     /// <summary>
@@ -433,17 +505,52 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     {
         pendingCarrierTimeout -= Time.fixedDeltaTime;
 
-        Transform resolved = ResolveView(pendingCarrierViewId);
-        if (resolved != null)
+        if (ResolveView(pendingCarrierViewId) != null)
         {
             int carrierViewId = pendingCarrierViewId;
             pendingCarrierViewId = -1;
-            ApplyState(CargoState.Stowed, -1, carrierViewId, transform.localPosition, transform.localRotation, false);
+            ApplyState(CargoState.Stowed, -1, carrierViewId, Vector3.zero, Quaternion.identity, false);
             return;
         }
 
         if (pendingCarrierTimeout <= 0f)
             pendingCarrierViewId = -1;
+    }
+
+    #endregion
+
+    #region Network
+
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            // Stowed boxes send a constant so UnreliableOnChange suppresses them entirely.
+            bool sendPose = state != CargoState.Stowed;
+
+            stream.SendNext((int)state);
+            stream.SendNext(sendPose ? transform.position : Vector3.zero);
+            stream.SendNext(sendPose ? transform.rotation : Quaternion.identity);
+            stream.SendNext(sendPose && rb != null && !rb.isKinematic ? rb.linearVelocity : Vector3.zero);
+        }
+        else
+        {
+            int remoteState = (int)stream.ReceiveNext();
+            Vector3 pos = (Vector3)stream.ReceiveNext();
+            Quaternion rot = (Quaternion)stream.ReceiveNext();
+            Vector3 vel = (Vector3)stream.ReceiveNext();
+
+            if (IsWriter) return;
+
+            // State travels by reliable RPC while poses are unreliable, so a packet from
+            // before the last transition can still land. Its pose is meaningless now.
+            if (remoteState != (int)state || state == CargoState.Stowed) return;
+
+            float lag = Mathf.Clamp((float)(PhotonNetwork.Time - info.SentServerTime), 0f, maxExtrapolation);
+            netPos = pos + vel * lag;
+            netRot = rot;
+            hasNetPose = true;
+        }
     }
 
     #endregion
@@ -478,7 +585,9 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         ZeroVelocities();
         transform.position = worldPos;
         transform.rotation = worldRot;
-        ResetTransformView();
+        netPos = worldPos;
+        netRot = worldRot;
+        snapNextPose = true;
     }
 
     #endregion
@@ -509,6 +618,11 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
         photonView.RPC(nameof(RpcApplyState), target,
             (int)state, holderActor, ViewIdOf(carrier), localPos, localRot, stowed);
+
+        // The pose stream is UnreliableOnChange, so a box that already settled sends
+        // nothing and the newcomer would keep it wherever it was instantiated.
+        if (!stowed)
+            photonView.RPC(nameof(RpcTeleport), target, transform.position, transform.rotation);
     }
 
     public override void OnPlayerLeftRoom(Player otherPlayer)
