@@ -30,6 +30,7 @@ public class CarCamera : MonoBehaviour
     [SerializeField] private float positionSmoothTime = 0.25f;
     [SerializeField] private float targetSmoothSpeed = 6f;
     [SerializeField] private float lookHeight = 1.5f;
+    [SerializeField] private float snapDistance = 15f;
 
     private int currentAngle;
     private float yaw;
@@ -105,7 +106,20 @@ public class CarCamera : MonoBehaviour
     {
         if (target == null || allAngles.Count == 0) return;
 
-        smoothTarget = Vector3.Lerp(smoothTarget, target.position, Time.deltaTime * targetSmoothSpeed);
+        // A checkpoint respawn teleports the truck, and the camera is also re-enabled from
+        // wherever it was left when the player was on foot. Easing over a gap that large
+        // would send the camera flying across the map, so the history is dropped instead.
+        bool snap = Vector3.Distance(smoothTarget, target.position) > snapDistance;
+
+        if (snap)
+        {
+            smoothTarget = target.position;
+            smoothVelocity = Vector3.zero;
+        }
+        else
+        {
+            smoothTarget = Vector3.Lerp(smoothTarget, target.position, Time.deltaTime * targetSmoothSpeed);
+        }
 
         object current = allAngles[currentAngle];
 
@@ -114,12 +128,15 @@ public class CarCamera : MonoBehaviour
             Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
             Vector3 desiredPos = smoothTarget + rotation * offset;
 
-            transform.position = Vector3.SmoothDamp(
-                transform.position, desiredPos, ref smoothVelocity, positionSmoothTime);
+            transform.position = snap
+                ? desiredPos
+                : Vector3.SmoothDamp(transform.position, desiredPos, ref smoothVelocity, positionSmoothTime);
 
             Vector3 lookTarget = smoothTarget + Vector3.up * lookHeight;
             Quaternion desiredRot = Quaternion.LookRotation(lookTarget - transform.position);
-            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRot, Time.deltaTime * 8f);
+            transform.rotation = snap
+                ? desiredRot
+                : Quaternion.Slerp(transform.rotation, desiredRot, Time.deltaTime * 8f);
         }
         else if (current is Transform camPos)
         {

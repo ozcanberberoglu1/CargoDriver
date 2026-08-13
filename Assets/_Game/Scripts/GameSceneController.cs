@@ -23,6 +23,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     [Header("Checkpoints")]
     [SerializeField] private CheckpointData[] checkpoints;
 
+    /// <summary>Kill volume, exposed so players on foot can check themselves against it.</summary>
+    public static Collider DeadZone { get; private set; }
+
     private GameObject spawnedPickup;
     private int currentCheckpointIndex;
     private readonly List<CargoSnapshot> savedCargoSnapshots = new();
@@ -49,6 +52,14 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         NetworkedCargoBody.Policy = CargoAuthorityPolicy.HostAuthority;
         NetworkedCargoBody.ReferenceFrame = null;
         NetworkedCargoBody.PreventSleep = true;
+
+        DeadZone = deadCollider;
+    }
+
+    private void OnDestroy()
+    {
+        if (DeadZone == deadCollider)
+            DeadZone = null;
     }
 
     private IEnumerator Start()
@@ -220,6 +231,9 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         Vector3 spawnPos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
         Quaternion spawnRot = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
 
+        // Sent before the truck moves so nobody is left standing at the old location.
+        VehicleInteraction.BoardEveryone();
+
         Rigidbody rb = spawnedPickup.GetComponent<Rigidbody>();
         if (rb != null)
         {
@@ -266,12 +280,18 @@ public class GameSceneController : MonoBehaviourPunCallbacks
 
     #region Car Physics
 
+    /// <summary>
+    /// Players collide with the truck so nobody can walk into the bodywork. Riders are kept
+    /// out of the simulation by having their collider switched off while seated, not by
+    /// punching a hole in the collision matrix. The matrix is global and survives scene
+    /// loads, so this is set explicitly rather than assumed.
+    /// </summary>
     public static void SetupCollisionLayers()
     {
         int playerLayer = LayerMask.NameToLayer("Player");
         int vehicleLayer = LayerMask.NameToLayer("Vehicle");
         if (playerLayer >= 0 && vehicleLayer >= 0)
-            Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, true);
+            Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, false);
     }
 
     public static void SetLayerRecursive(GameObject obj, int layer, bool skipCargoBoxes = true)

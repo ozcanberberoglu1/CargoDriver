@@ -36,11 +36,14 @@ public class ToyController : MonoBehaviourPun
     private bool isFPS;
     private bool isPaused;
     private bool movementLocked;
+    private bool physicsGhost;
+    private Transform ridingSeat;
 
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
 
     public bool IsGrounded { get; private set; }
+    public bool IsRidingVehicle { get; private set; }
     public float CurrentSpeed { get; private set; }
     public bool IsFPS => isFPS;
     public bool IsPaused => isPaused;
@@ -79,7 +82,6 @@ public class ToyController : MonoBehaviourPun
                 col.enabled = false;
             }
 
-            StartCoroutine(TryAttachToPickupRemote());
             return;
         }
 
@@ -122,6 +124,98 @@ public class ToyController : MonoBehaviourPun
     {
         movementLocked = locked;
     }
+
+    #region Vehicle riding
+
+    /// <summary>
+    /// Seats the avatar in the truck. The collider goes away with it: a rider must not take
+    /// part in the simulation, otherwise it fights the bodywork it is sitting inside.
+    ///
+    /// The avatar follows the seat rather than being parented to it. Re-parenting would
+    /// make the synced local position jump between vehicle space and world space, and
+    /// PhotonTransformView turns that jump into a velocity it extrapolates from, which
+    /// flings the remote copy across the map on the frame someone steps out.
+    /// </summary>
+    public void AttachToVehicle(Transform seat)
+    {
+        if (seat == null) return;
+
+        ridingSeat = seat;
+        IsRidingVehicle = true;
+
+        if (controller != null) controller.enabled = false;
+        SetBodyCollidersEnabled(false);
+        SetMovementLocked(true);
+
+        velocity = Vector3.zero;
+        SetPlayerLayer();
+    }
+
+    /// <summary>Puts the avatar back on its own feet, keeping its current world pose.</summary>
+    public void DetachFromVehicle()
+    {
+        ridingSeat = null;
+        IsRidingVehicle = false;
+
+        SetMovementLocked(false);
+        velocity = Vector3.zero;
+        yaw = transform.eulerAngles.y;
+
+        // Remote copies are display only and had their colliders stripped at spawn.
+        if (photonView.IsMine)
+        {
+            SetBodyCollidersEnabled(true);
+            if (controller != null) controller.enabled = true;
+            ApplyPhysicsGhost();
+        }
+    }
+
+    /// <summary>
+    /// Makes the character one way solid: it is still stopped by everything it walks into,
+    /// but nothing collides with its capsule. A CharacterController is a kinematic body, so
+    /// without this it has infinite mass and standing on the truck would shove the truck
+    /// around and driving into a player would stop a 1000 kg vehicle dead.
+    /// </summary>
+    public void SetPhysicsGhost(bool ghost)
+    {
+        physicsGhost = ghost;
+        ApplyPhysicsGhost();
+    }
+
+    private void ApplyPhysicsGhost()
+    {
+        if (controller != null)
+            controller.detectCollisions = !physicsGhost;
+    }
+
+    /// <summary>A CharacterController ignores transform writes, so it is cycled around them.</summary>
+    public void TeleportTo(Vector3 position, Quaternion rotation)
+    {
+        bool hadController = controller != null && controller.enabled;
+        if (hadController) controller.enabled = false;
+
+        transform.SetPositionAndRotation(position, rotation);
+
+        if (hadController)
+        {
+            controller.enabled = true;
+            ApplyPhysicsGhost();
+        }
+
+        velocity = Vector3.zero;
+        yaw = rotation.eulerAngles.y;
+    }
+
+    private void SetBodyCollidersEnabled(bool enabled)
+    {
+        foreach (Collider col in GetComponentsInChildren<Collider>(true))
+        {
+            if (col is CharacterController) continue;
+            col.enabled = enabled;
+        }
+    }
+
+    #endregion
 
     private void Update()
     {
@@ -216,6 +310,12 @@ public class ToyController : MonoBehaviourPun
 
     private void LateUpdate()
     {
+        // Runs on every client, and after the truck has been interpolated for this frame so
+        // the rider sits still in the cab instead of shivering against it. Rotation is left
+        // alone: the local player aims it with the mouse, remotes get it off the stream.
+        if (ridingSeat != null)
+            transform.position = ridingSeat.position;
+
         if (!photonView.IsMine || playerCamera == null) return;
 
         if (isFPS)
@@ -291,45 +391,6 @@ public class ToyController : MonoBehaviourPun
         }
     }
 
-    private System.Collections.IEnumerator TryAttachToPickupRemote()
-    {
-        yield return new WaitForSeconds(3f);
-
-        if (!PhotonNetwork.InRoom) yield break;
-
-        var props = PhotonNetwork.CurrentRoom.CustomProperties;
-        object val;
-        props.TryGetValue("ctrl_Behind", out val);
-        int behindActor = val != null ? (int)val : -1;
-
-        if (behindActor != photonView.Owner.ActorNumber) yield break;
-
-        GameObject pickup = null;
-        foreach (var pv in FindObjectsByType<PhotonView>(FindObjectsSortMode.None))
-        {
-            if (pv.GetComponent<CarControl>() != null)
-            {
-                pickup = pv.gameObject;
-                break;
-            }
-        }
-
-        if (pickup == null) yield break;
-
-        PhotonTransformView ptv = GetComponent<PhotonTransformView>();
-        if (ptv != null)
-            ptv.enabled = false;
-
-        Transform spawnPoint = pickup.transform.Find("PlayerCarSpawn");
-        Transform parent = spawnPoint != null ? spawnPoint : pickup.transform;
-
-        transform.SetParent(parent, false);
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-
-        SetPlayerLayer();
-    }
-
     private void SetPlayerLayer()
     {
         int playerLayer = LayerMask.NameToLayer("Player");
@@ -338,10 +399,6 @@ public class ToyController : MonoBehaviourPun
         gameObject.layer = playerLayer;
         foreach (Transform child in GetComponentsInChildren<Transform>(true))
             child.gameObject.layer = playerLayer;
-
-        int vehicleLayer = LayerMask.NameToLayer("Vehicle");
-        if (vehicleLayer >= 0)
-            Physics.IgnoreLayerCollision(playerLayer, vehicleLayer, true);
     }
 
     private void SetOwnMeshVisibility(bool visible)

@@ -40,6 +40,10 @@ MonoBehaviour:
   - Fire
   - RespawnSpaceship
   - RPC_SendInput
+  - RpcApplyState
+  - RpcRequestGrab
+  - RpcRequestRelease
+  - RpcTeleport
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0
