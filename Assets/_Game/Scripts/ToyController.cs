@@ -120,9 +120,22 @@ public class ToyController : MonoBehaviourPun
         SetPlayerName();
     }
 
+    /// <summary>
+    /// Update() stops driving the animator while movement is locked, so the locomotion
+    /// parameters are settled here. Without this a player who boards the truck at a run
+    /// keeps the last frame's run cycle looping, jogging on the spot in the truck bed.
+    /// </summary>
     public void SetMovementLocked(bool locked)
     {
         movementLocked = locked;
+
+        if (!locked) return;
+
+        CurrentSpeed = 0f;
+        // A locked character is at rest by definition; boarding mid-jump would otherwise
+        // leave it falling forever. The jump check that reads this only runs while unlocked.
+        IsGrounded = true;
+        UpdateAnimator();
     }
 
     #region Vehicle riding
