@@ -107,6 +107,7 @@ GameObject:
   - component: {fileID: 1295808075075909996}
   - component: {fileID: 4773027153397760477}
   - component: {fileID: -7994968773385406892}
+  - component: {fileID: 7175008513927476356}
   m_Layer: 0
   m_Name: Pickup
   m_TagString: Untagged
@@ -213,6 +214,9 @@ MonoBehaviour:
   - {fileID: 5607016845652708829}
   centerOfMass: {fileID: 5514210230411350234}
   steeringWheel: {fileID: 365045273514190426}
+  positionSmoothTime: 0.06
+  rotationLerpSpeed: 20
+  teleportDistance: 10
 --- !u!65 &352928217916752676
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -274,8 +278,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 4.350019, y: 0.31343436, z: 4.914723}
-  m_Center: {x: -0.0003619194, y: 1.663313, z: -3.2459023}
+  m_Size: {x: 4.350019, y: 0.31343436, z: 3.7065125}
+  m_Center: {x: -0.0003619194, y: 1.663313, z: -2.641797}
 --- !u!65 &4773027153397760477
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -320,6 +324,27 @@ MonoBehaviour:
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
+--- !u!65 &7175008513927476356
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 406654488547587606}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 4.350019, y: 1.3126879, z: 0.27925682}
+  m_Center: {x: -0.0003619194, y: 2.514675, z: -4.5}
 --- !u!1 &1035304057869835875
 GameObject:
   m_ObjectHideFlags: 0
@@ -1872,6 +1897,7 @@ MonoBehaviour:
   positionSmoothTime: 0.1
   targetSmoothSpeed: 6
   lookHeight: 1.5
+  snapDistance: 15
 --- !u!1 &6689507573417852015
 GameObject:
   m_ObjectHideFlags: 0
