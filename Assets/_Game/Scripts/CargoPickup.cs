@@ -192,7 +192,6 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private void HandleSnapKeys(NetworkedCargoBody carried)
     {
         if (carried == null) return;
-        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameScene") return;
 
         Keyboard kb = Keyboard.current;
         if (kb == null) return;

@@ -193,6 +193,24 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             pendingCarrierViewId = legoParentViewId;
             pendingCarrierTimeout = 10f;
         }
+
+        // Runs on every client, so the lobby-authored tint shows up for everyone.
+        if (data.Length >= 8)
+            ApplyColor(new Color((float)data[4], (float)data[5], (float)data[6], (float)data[7]));
+    }
+
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
+    /// <summary>Applies the serialized tint to this box's own material instance locally.</summary>
+    private void ApplyColor(Color c)
+    {
+        Renderer r = GetComponent<Renderer>();
+        if (r == null) r = GetComponentInChildren<Renderer>();
+        if (r == null) return;
+
+        Material m = r.material; // per-box instance; the box keeps it through stow/detach
+        if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, c);
+        m.color = c;
     }
 
     /// <summary>Only meaningful on the writer, which is the machine that simulates this body.</summary>

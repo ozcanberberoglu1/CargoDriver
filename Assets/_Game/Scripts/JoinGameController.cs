@@ -455,7 +455,9 @@ public class JoinGameController : MonoBehaviourPunCallbacks
                 }
             }
 
-            data += $";{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)},{F(scale.x)},{F(scale.y)},{F(scale.z)},{prefabName},{parentIdx}";
+            Color col = GetBoxColor(box);
+
+            data += $";{F(localPos.x)},{F(localPos.y)},{F(localPos.z)},{F(localRot.x)},{F(localRot.y)},{F(localRot.z)},{F(localRot.w)},{F(scale.x)},{F(scale.y)},{F(scale.z)},{prefabName},{parentIdx},{F(col.r)},{F(col.g)},{F(col.b)},{F(col.a)}";
         }
 
         Debug.Log($"[JoinGame] Saving cargo data: {data}");
@@ -463,6 +465,25 @@ public class JoinGameController : MonoBehaviourPunCallbacks
     }
 
     private string F(float v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
+    /// <summary>
+    /// Reads the box's authored tint from its shared material so it can travel to the
+    /// GameScene. The lobby boxes are scene instances with per-instance material overrides;
+    /// GameScene re-instantiates from a single Resources prefab, so without this every box
+    /// would spawn with the prefab's default color for every player.
+    /// </summary>
+    private Color GetBoxColor(GameObject box)
+    {
+        Renderer r = box.GetComponent<Renderer>();
+        if (r == null) r = box.GetComponentInChildren<Renderer>();
+        if (r == null || r.sharedMaterial == null) return Color.white;
+
+        Material m = r.sharedMaterial;
+        if (m.HasProperty(BaseColorId)) return m.GetColor(BaseColorId);
+        return m.color;
+    }
 
     private void CollectAllLegos(Transform t, List<GameObject> result)
     {

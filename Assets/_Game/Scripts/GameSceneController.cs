@@ -396,6 +396,16 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             string prefabName = c.Length > 10 ? c[10] : "";
             int parentIdx = c.Length > 11 ? int.Parse(c[11]) : -1;
 
+            // Color is optional (older layouts omit it) — indices 12..15 hold RGBA.
+            bool hasColor = c.Length >= 16;
+            Color color = Color.white;
+            if (hasColor)
+                color = new Color(
+                    float.Parse(c[12], CultureInfo.InvariantCulture),
+                    float.Parse(c[13], CultureInfo.InvariantCulture),
+                    float.Parse(c[14], CultureInfo.InvariantCulture),
+                    float.Parse(c[15], CultureInfo.InvariantCulture));
+
             Vector3 worldPos = pickup.transform.TransformPoint(localPos);
             Quaternion worldRot = pickup.transform.rotation * localRot;
 
@@ -408,10 +418,11 @@ public class GameSceneController : MonoBehaviourPunCallbacks
                 if (parentView != null) legoParentViewId = parentView.ViewID;
             }
 
-            object[] instantiationData =
-            {
-                scale.x, scale.y, scale.z, legoParentViewId
-            };
+            // Color rides in the instantiation data so it reaches every client (including
+            // late joiners) in OnPhotonInstantiate, not just the master that spawns the box.
+            object[] instantiationData = hasColor
+                ? new object[] { scale.x, scale.y, scale.z, legoParentViewId, color.r, color.g, color.b, color.a }
+                : new object[] { scale.x, scale.y, scale.z, legoParentViewId };
 
             GameObject box = PhotonNetwork.InstantiateRoomObject(
                 ResolveCargoPrefabName(prefabName), worldPos, worldRot, 0, instantiationData);
