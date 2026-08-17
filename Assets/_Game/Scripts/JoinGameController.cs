@@ -400,17 +400,20 @@ public class JoinGameController : MonoBehaviourPunCallbacks
 
     private void SaveCargoPositions()
     {
-        var lobby = FindAnyObjectByType<LobbyController>();
-        if (lobby == null)
+        // Cargo is dispensed at runtime by the CargoMachine, so gather it by tag rather than
+        // from a hand-placed list. Only roots (non-welded boxes) seed the walk; CollectAllLegos
+        // then flattens each lego structure parent-first so parentIdx references stay valid.
+        GameObject[] tagged = GameObject.FindGameObjectsWithTag("CargoBox");
+        var boxes = new List<GameObject>();
+        foreach (GameObject box in tagged)
         {
-            Debug.LogError("[JoinGame] LobbyController not found!");
-            return;
+            LegoSnap snap = box.GetComponent<LegoSnap>();
+            if (snap != null && snap.HasParent) continue; // welded child — collected under its root
+            boxes.Add(box);
         }
-
-        List<GameObject> boxes = lobby.CargoBoxes;
-        if (boxes == null || boxes.Count == 0)
+        if (boxes.Count == 0)
         {
-            Debug.LogError("[JoinGame] No cargo boxes in list!");
+            Debug.LogError("[JoinGame] No cargo boxes found (tag: CargoBox)!");
             return;
         }
 

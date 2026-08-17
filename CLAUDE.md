@@ -46,6 +46,7 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 | `RoomListItem` | 76 | RoomContent prefab | Oda satırı, dolu ise buton kapalı |
 | `LobbyController` | 598 | LobbyScene | Spawn, pause paneli, ping, kargo tamam kontrolü, müzik/SFX |
 | `JoinGameController` | 617 | LobbyScene | Kontrol tuşu dağıtımı (`ctrl_W/A/S/D/Space`, `ctrl_Behind`), ready, geri sayım, **kargo layout'unu serialize eder** |
+| `CargoMachine` | ~230 | LobbyScene | Oyuncu 3D butona tıklar → **master** rastgele lego+renk spawn'lar (event 70, `InstantiateRoomObject`), 50'de durur. Sayaç/hazır bayrağı oda property (`legoCount`/`machineActive`/`legosReady`) |
 | `RadioController` | 391 | LobbyScene | Mikrofonla 10 sn kayıt → Photon event ile herkese, echo \+ pitch efekti |
 | `GameSceneController` | 472 | GameScene | Kamyon\+kargo spawn, checkpoint, ölüm bölgesi, layer kurulumu |
 | `MovingObstacle` (\+Editor) | 106\+259 | GameScene | Kinematik hareketli engel, custom inspector |
@@ -77,7 +78,9 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 
 **Lego akışı:** `LegoSnap.TrySnap()` → `TopCollider*`/`DownCollider*` çift bulur → `AuthorityStow(parent, localPos, localRot)`. Yani snap \= tek bir state geçişi; ayrı bir ağ kanalı yok. Tuşlar: **E** snap, **X** parent'tan ayır, **Z** hepsini ayır (artık **hem LobbyScene hem GameScene**'de aktif — kutu taşınırken çalışır).
 
-**Lobby → Game aktarımı:** `JoinGameController.SaveCargoPositions()` her kutuyu `localPos,localRot,scale,prefabName,parentIdx` olarak `;` ile ayrılmış tek string yapıp oda property `cargoData`'ya yazar. `GameSceneController.SpawnCargoOnPickup()` bunu parse edip `InstantiateRoomObject` ile master'da yeniden kurar (parentler çocuklardan önce yazıldığı için lego ViewID'leri hep hazır).
+**Kargo kaynağı:** Kutular artık sahneye elle yerleştirilmez; **`CargoMachine`** LobbyScene'de runtime'da spawn'lar (master, `InstantiateRoomObject`, rastgele prefab + `_BaseColor` tint'i `instantiationData` ile). Hem "kargo tamam" kontrolü (`LobbyController.CheckAllCargoLoaded`) hem serialize (`SaveCargoPositions`) kutuları **`CargoBox` tag'iyle** dinamik toplar (root'lar seed, welded child'lar `CollectAllLegos` ile parent-first). Tamamlama, makine tüm partiyi bitirene kadar (`legosReady` oda property) bekler — yoksa erken spawn olan birkaç kutu kamyondayken yanlış tamamlanır.
+
+**Lobby → Game aktarımı:** `JoinGameController.SaveCargoPositions()` her kutuyu `localPos,localRot,scale,prefabName,parentIdx,r,g,b,a` olarak `;` ile ayrılmış tek string yapıp oda property `cargoData`'ya yazar. `GameSceneController.SpawnCargoOnPickup()` bunu parse edip `InstantiateRoomObject` ile master'da yeniden kurar (parentler çocuklardan önce yazıldığı için lego ViewID'leri hep hazır).
 
 * * *
 

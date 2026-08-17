@@ -46,6 +46,7 @@ public class ToyController : MonoBehaviourPun
     public bool IsRidingVehicle { get; private set; }
     public float CurrentSpeed { get; private set; }
     public bool IsFPS => isFPS;
+    public Camera PlayerCamera => playerCamera;
     public bool IsPaused => isPaused;
     public float Yaw => yaw;
     public float Pitch => pitch;

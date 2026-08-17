@@ -341,9 +341,17 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
     private void CheckAllCargoLoaded()
     {
-        if (truckTrigger == null || cargoBoxes == null || cargoBoxes.Count == 0) return;
+        if (truckTrigger == null) return;
 
-        foreach (GameObject box in cargoBoxes)
+        // The cargo now comes from the CargoMachine at runtime, so wait until it has
+        // dispensed the whole batch; otherwise a few early boxes already in the truck
+        // would trip completion before the rest even exist.
+        if (!AreLegosReady()) return;
+
+        GameObject[] boxes = GameObject.FindGameObjectsWithTag("CargoBox");
+        if (boxes.Length == 0) return;
+
+        foreach (GameObject box in boxes)
         {
             if (box == null) return;
 
@@ -356,6 +364,13 @@ public class LobbyController : MonoBehaviourPunCallbacks
 
         cargoCompleted = true;
         StartCoroutine(ShowSuccessMessage());
+    }
+
+    private bool AreLegosReady()
+    {
+        if (PhotonNetwork.CurrentRoom == null) return false;
+        return PhotonNetwork.CurrentRoom.CustomProperties
+                   .TryGetValue(CargoMachine.PROP_READY, out object v) && (bool)v;
     }
 
     private IEnumerator ShowSuccessMessage()
