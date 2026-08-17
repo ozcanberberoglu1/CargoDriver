@@ -14,6 +14,8 @@ public class LegoSnap : MonoBehaviour
     [Header("Snap Settings")]
     [SerializeField] private float snapDistance = 3f;
     [SerializeField] private float snapDepth = 0.05f;
+    [Tooltip("Past snapDistance but within this, the local grid hint shows red (near but not snap-able).")]
+    [SerializeField] private float previewRedDistance = 5f;
 
     private static readonly List<LegoSnap> allLegos = new();
     private static readonly HashSet<Collider> usedColliders = new();
@@ -25,6 +27,16 @@ public class LegoSnap : MonoBehaviour
     private NetworkedCargoBody body;
 
     public bool HasParent => parentLego != null;
+    public float SnapDistance => snapDistance;
+    public float PreviewRedDistance => previewRedDistance;
+
+    /// <summary>One target stud the carried lego is hovering over, for the local grid hint.</summary>
+    public struct SnapPreviewHit
+    {
+        public LegoSnap targetLego;   // box that owns the stud (and its LegoSnapPreview)
+        public Collider targetTop;    // the TopCollider the carried lego would land on
+        public bool green;            // true = close enough to snap; false = near but too far
+    }
 
     private void Awake()
     {
@@ -171,24 +183,94 @@ public class LegoSnap : MonoBehaviour
             parentCol = bestOther;
         }
 
-        Vector3 offset = parentCol.bounds.center - childCol.bounds.center;
-        bool childIsDown = childCol.transform.name.StartsWith("DownCollider");
-        if (childIsDown)
-            offset.y += snapDepth;
-        else
-            offset.y -= snapDepth;
-
         NetworkedCargoBody childBody = snapChild.GetComponent<NetworkedCargoBody>();
         if (childBody == null) return false;
 
-        Vector3 snappedWorldPos = snapChild.transform.position + offset;
-        Vector3 localPos = snapParent.transform.InverseTransformPoint(snappedWorldPos);
-        Quaternion localRot = Quaternion.Inverse(snapParent.transform.rotation) * snapChild.transform.rotation;
+        Transform parentT = snapParent.transform;
+        Transform childT = snapChild.transform;
 
-        childBody.AuthorityStow(snapParent.transform, localPos, localRot);
+        // Square the brick to the parent's stud grid (nearest 90°) so it never welds crooked,
+        // no matter how the player was holding/rotating it.
+        Quaternion localRot = SnapTo90(Quaternion.Inverse(parentT.rotation) * childT.rotation);
+        Quaternion targetWorldRot = parentT.rotation * localRot;
+
+        // Land the matched stud exactly on the parent stud, pushed by snapDepth along parent up.
+        bool childIsDown = childCol.transform.name.StartsWith("DownCollider");
+        Vector3 targetColCenter = parentCol.bounds.center + parentT.up * (childIsDown ? snapDepth : -snapDepth);
+
+        // Re-solve the child-root position for the SQUARED rotation, so only this one matched stud
+        // is aligned. When a 2-stud brick is brought over a single stud, its other stud simply
+        // overhangs — it does not get force-fitted onto the neighbour.
+        Vector3 colLocal = Quaternion.Inverse(childT.rotation) * (childCol.bounds.center - childT.position);
+        Vector3 snappedWorldPos = targetColCenter - targetWorldRot * colLocal;
+        Vector3 localPos = parentT.InverseTransformPoint(snappedWorldPos);
+
+        childBody.AuthorityStow(parentT, localPos, localRot);
 
         PlaySnapSound();
         return true;
+    }
+
+    /// <summary>
+    /// Non-committing sibling of <see cref="TrySnap"/> used to drive the local grid hints.
+    /// For this carried structure, returns the target studs the player is hovering over,
+    /// each flagged green (would snap, matching TrySnap's snapDistance) or red (near but too
+    /// far). Only Down→Top matches are reported, since the grids live on the target's top
+    /// studs. Empty when nothing is within range. Touches no state — pure read.
+    /// </summary>
+    public void EvaluatePreview(List<SnapPreviewHit> results)
+    {
+        results.Clear();
+
+        List<LegoSnap> members = GetAllConnected();
+
+        // Each of the carried block's exposed bottom studs claims the nearest target stud.
+        // Several studs of the block may claim the SAME target stud; the CargoPickup driver
+        // then lets green win, so a stud the bottom lego can actually snap onto reads green
+        // even while another, farther lego of the block also hovers over it.
+        foreach (LegoSnap member in members)
+        {
+            if (member.snapColliders == null) continue;
+
+            foreach (Collider down in member.snapColliders)
+            {
+                if (down == null || usedColliders.Contains(down)) continue;
+                if (!down.name.StartsWith("DownCollider")) continue; // carried lands via its bottom studs
+
+                Collider bestTop = null;
+                LegoSnap bestLego = null;
+                float bestDist = float.MaxValue;
+
+                foreach (LegoSnap other in allLegos)
+                {
+                    if (other == null || members.Contains(other)) continue; // skip our own structure
+                    if (other.snapColliders == null) continue;
+
+                    foreach (Collider top in other.snapColliders)
+                    {
+                        if (top == null || usedColliders.Contains(top)) continue;
+                        if (!top.name.StartsWith("TopCollider")) continue;
+
+                        float dist = Vector3.Distance(down.bounds.center, top.bounds.center);
+                        if (dist <= previewRedDistance && dist < bestDist)
+                        {
+                            bestDist = dist;
+                            bestTop = top;
+                            bestLego = other;
+                        }
+                    }
+                }
+
+                if (bestTop == null) continue;
+
+                results.Add(new SnapPreviewHit
+                {
+                    targetLego = bestLego,
+                    targetTop = bestTop,
+                    green = bestDist <= snapDistance
+                });
+            }
+        }
     }
 
     private bool IsCompatible(Collider a, Collider b)
@@ -251,6 +333,16 @@ public class LegoSnap : MonoBehaviour
     #endregion
 
     #region Helpers
+
+    /// <summary>Rounds a rotation to the nearest 90° on each axis so bricks weld square to the grid.</summary>
+    private static Quaternion SnapTo90(Quaternion q)
+    {
+        Vector3 e = q.eulerAngles;
+        e.x = Mathf.Round(e.x / 90f) * 90f;
+        e.y = Mathf.Round(e.y / 90f) * 90f;
+        e.z = Mathf.Round(e.z / 90f) * 90f;
+        return Quaternion.Euler(e);
+    }
 
     private void PlaySnapSound()
     {

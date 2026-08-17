@@ -76,6 +76,8 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 
 **Diğer kritik detaylar:** `maxDepenetrationVelocity=1` (kutular kamyonu fırlatmasın), state güvenilir RPC / poz güvensiz stream (eski poz paketleri state eşleşmezse atılır), geç katılan için `OnPlayerEnteredRoom` → 1 sn bekle → state RPC \+ teleport (buffered RPC yok), `pendingCarrierViewId` ile carrier henüz yokken stow ertelenir.
 
+**Snap önizleme (yalnız yerel):** `LegoSnapPreview` (CargoBox/CargoBox2 root'unda) her `TopCollider`'ı yeşil/kırmızı grid'e map'ler. Taşıyan oyuncunun `CargoPickup`'ı her frame `LegoSnap.EvaluatePreview()` çağırıp hedef stud'ların grid'ini `SetActive`'ler: `snapDistance` içinde yeşil, `previewRedDistance`'a kadar kırmızı, ötesi kapalı. Child `SetActive` senkronlanmadığı için diğer oyuncular görmez. Yeşil ⟺ E snap eder.
+
 **Lego akışı:** `LegoSnap.TrySnap()` → `TopCollider*`/`DownCollider*` çift bulur → `AuthorityStow(parent, localPos, localRot)`. Yani snap \= tek bir state geçişi; ayrı bir ağ kanalı yok. Tuşlar: **E** snap, **X** parent'tan ayır, **Z** hepsini ayır (artık **hem LobbyScene hem GameScene**'de aktif — kutu taşınırken çalışır).
 
 **Kargo kaynağı:** Kutular artık sahneye elle yerleştirilmez; **`CargoMachine`** LobbyScene'de runtime'da spawn'lar (master, `InstantiateRoomObject`, rastgele prefab + `_BaseColor` tint'i `instantiationData` ile). Hem "kargo tamam" kontrolü (`LobbyController.CheckAllCargoLoaded`) hem serialize (`SaveCargoPositions`) kutuları **`CargoBox` tag'iyle** dinamik toplar (root'lar seed, welded child'lar `CollectAllLegos` ile parent-first). Tamamlama, makine tüm partiyi bitirene kadar (`legosReady` oda property) bekler — yoksa erken spawn olan birkaç kutu kamyondayken yanlış tamamlanır.

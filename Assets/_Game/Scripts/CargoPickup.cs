@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -42,6 +43,10 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private float ikWeight;
     private bool isRotating;
     private float snapCooldown;
+
+    // Local-only snap hint bookkeeping (never networked).
+    private readonly List<LegoSnap.SnapPreviewHit> previewHits = new List<LegoSnap.SnapPreviewHit>();
+    private readonly HashSet<LegoSnapPreview> activePreviews = new HashSet<LegoSnapPreview>();
 
     private NetworkedCargoBody grabIntent;
     private float currentHoldDist;
@@ -90,6 +95,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         if (carried == null && grabIntent == null)
         {
+            ClearSnapPreview();
             if (pressing && snapCooldown <= 0f)
                 TryStartGrab(tc);
             return;
@@ -105,6 +111,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         HandleRotateInput(mouse, active);
         HandleScrollInput(mouse);
         HandleSnapKeys(carried);
+        UpdateSnapPreview(carried);
 
         active = CarriedBody != null ? CarriedBody : grabIntent;
         if (active != null)
@@ -150,6 +157,61 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         grabIntent = null;
         isRotating = false;
+        ClearSnapPreview();
+    }
+
+    /// <summary>
+    /// Drives the green/red grid hints on whatever target studs the carried lego is hovering
+    /// over. Purely local — runs only under the IsMine guard in Update, and toggles child
+    /// GameObjects that are never networked, so remote players see nothing of this.
+    /// </summary>
+    private void UpdateSnapPreview(NetworkedCargoBody carried)
+    {
+        if (carried == null || !carried.IsHeld)
+        {
+            ClearSnapPreview();
+            return;
+        }
+
+        LegoSnap snap = carried.GetComponent<LegoSnap>();
+        if (snap == null)
+        {
+            ClearSnapPreview();
+            return;
+        }
+
+        // Wipe last frame's hints first, then relight only what still matches this frame.
+        foreach (LegoSnapPreview p in activePreviews)
+            if (p != null) p.HideAll();
+        activePreviews.Clear();
+
+        snap.EvaluatePreview(previewHits);
+
+        // Two passes so green wins on any stud where the block can actually snap: draw the
+        // reds first, then let greens overwrite the same stud.
+        for (int pass = 0; pass < 2; pass++)
+        {
+            bool wantGreen = pass == 1;
+            foreach (LegoSnap.SnapPreviewHit hit in previewHits)
+            {
+                if (hit.green != wantGreen || hit.targetLego == null) continue;
+
+                LegoSnapPreview preview = hit.targetLego.GetComponent<LegoSnapPreview>();
+                if (preview == null) continue;
+
+                preview.Show(hit.targetTop, hit.green);
+                activePreviews.Add(preview);
+            }
+        }
+    }
+
+    private void ClearSnapPreview()
+    {
+        if (activePreviews.Count == 0) return;
+
+        foreach (LegoSnapPreview p in activePreviews)
+            if (p != null) p.HideAll();
+        activePreviews.Clear();
     }
 
     private void HandleRotateInput(Mouse mouse, NetworkedCargoBody body)
