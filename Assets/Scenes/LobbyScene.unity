@@ -5633,7 +5633,7 @@ MonoBehaviour:
   legoSnapSounds:
   - {fileID: 8300000, guid: 6f80f584cd751420e8c54b55a2c8137d, type: 3}
   - {fileID: 8300000, guid: f83b902b07389459b97b8828d932674d, type: 3}
-  musicVolume: 0.181
+  musicVolume: 0.046
   sfxVolume: 1
   pausePanel: {fileID: 3766828}
   exitRoomButton: {fileID: 587377651}
