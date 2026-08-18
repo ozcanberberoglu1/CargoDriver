@@ -90,6 +90,11 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         Mouse mouse = Mouse.current;
         if (mouse == null) return;
 
+        // Q pins the held brick in place, or unpins a frozen one you're aiming at.
+        Keyboard kb = Keyboard.current;
+        if (kb != null && kb.qKey.wasPressedThisFrame)
+            HandleFreezeKey(tc, mouse);
+
         bool pressing = mouse.leftButton.isPressed;
         NetworkedCargoBody carried = CarriedBody;
 
@@ -148,6 +153,35 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         currentHoldDist = holdForward;
         holdRotTarget = body.transform.rotation;
         isRotating = false;
+    }
+
+    /// <summary>
+    /// Q while holding pins the brick (and any welded block) where it is. Q while aiming at
+    /// a pinned brick with the grab button held unpins it back into free physics.
+    /// </summary>
+    private void HandleFreezeKey(ToyController tc, Mouse mouse)
+    {
+        NetworkedCargoBody held = CarriedBody;
+        if (held != null && held.IsHeld)
+        {
+            held.RequestFreeze();
+            grabIntent = null;
+            isRotating = false;
+            snapCooldown = 0.3f;
+            ClearSnapPreview();
+            return;
+        }
+
+        // Unpin: must be aiming at a pinned brick while holding the grab button.
+        if (!mouse.leftButton.isPressed) return;
+
+        bool fps = tc != null && tc.IsFPS;
+        Transform hit = fps ? FindLookedAtBox() : FindClosestBox();
+        if (hit == null) return;
+
+        NetworkedCargoBody body = FindGrabbableBody(hit);
+        if (body != null && body.IsFrozen)
+            body.RequestUnfreeze();
     }
 
     private void ReleaseGrab(NetworkedCargoBody carried)

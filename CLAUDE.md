@@ -65,7 +65,7 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 
 `NetworkedCargoBody` tek kural üzerine kurulu: **her cismin her an tam olarak bir writer'ı vardır.** Writer gerçek PhysX çalıştırır, diğer herkes kukla. Rigidbody / isKinematic / useGravity / transform.parent'a bu component dışından dokunulmaz.
 
-**State makinesi** — `Free` (serbest fizik) · `Held` (taşınıyor, velocity servo) · `Stowed` (lego olarak kaynaklanmış; **Rigidbody yok edilir**, carrier'ın compound collider'ına girer).
+**State makinesi** — `Free` (serbest fizik) · `Held` (taşınıyor, velocity servo) · `Stowed` (lego olarak kaynaklanmış; **Rigidbody yok edilir**, carrier'ın compound collider'ına girer) · `Frozen` (oyuncu **Q** ile yerinde sabitledi; **her client'ta kinematik**, dünya-sabit, writer yok, ReferenceFrame'i izlemez — araba/karakter/Held lego çarpınca taş gibi durur, grab reddedilir. `RequestFreeze`/`RequestUnfreeze`, poz reliable state RPC'sinde taşınır).
 
 **İki otorite politikası:**
 
@@ -109,6 +109,7 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 | Scroll | Tutma mesafesi (1–4 m) |
 | E | Lego snap · radyoda kayıt başlat |
 | X / Z | Parent'tan ayır / hepsini ayır |
+| Q | Tutulan legoyu yerinde sabitle (Frozen) · (tutma tuşu basılı + hedefteyken) sabit legoyu çöz |
 | C | FPS↔TPS (oyuncu) · kamera açısı (araç) |
 | F | Araca bin / in |
 | R | Checkpoint respawn (yalnız master) |

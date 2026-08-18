@@ -22,7 +22,11 @@ public enum CargoState
     Held = 1,
 
     /// <summary>Welded into a carrier's compound collider. No rigidbody of its own.</summary>
-    Stowed = 2
+    Stowed = 2,
+
+    /// <summary>Pinned in the world by a player. Kinematic and solid on every client, no
+    /// writer simulates it — a static obstacle that never moves and never follows the truck.</summary>
+    Frozen = 3
 }
 
 /// <summary>
@@ -116,6 +120,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     public CargoState State => state;
     public int HolderActor => holderActor;
     public bool IsHeld => state == CargoState.Held;
+    public bool IsFrozen => state == CargoState.Frozen;
 
     /// <summary>True on the single client responsible for simulating this body.</summary>
     public bool IsWriter => photonView.IsMine;
@@ -281,6 +286,16 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
                 LinkLegoParent(false);
                 EnsureRigidbody();
                 break;
+
+            case CargoState.Frozen:
+                // Pinned in the world. Stays parentless so it never rides the truck; any
+                // stowed children keep hanging off it, so a welded block freezes as one piece.
+                transform.SetParent(null, true);
+                LinkLegoParent(false);
+                EnsureRigidbody();
+                if (hasPose)
+                    transform.SetPositionAndRotation(localPos, localRot); // localPos/Rot carry the world pose
+                break;
         }
 
         ApplyBodyMode(force: true);
@@ -296,6 +311,20 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         {
             bodyModeIsWriter = false;
             bodyModeInitialized = true;
+            return;
+        }
+
+        if (state == CargoState.Frozen)
+        {
+            // Kinematic and solid on every client — no one simulates it, everyone collides
+            // with it. Dynamic bodies (the car, a carried box) get stopped; it never moves.
+            bodyModeIsWriter = false;
+            bodyModeInitialized = true;
+            ZeroVelocities();
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            rb.isKinematic = true;
+            rb.useGravity = false;
+            rb.interpolation = RigidbodyInterpolation.None;
             return;
         }
 
@@ -456,6 +485,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     public bool RequestGrab()
     {
         if (state == CargoState.Held) return false;
+        if (state == CargoState.Frozen) return false; // pinned bricks can't be grabbed/moved
 
         int me = PhotonNetwork.LocalPlayer.ActorNumber;
 
@@ -498,6 +528,32 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             AuthorityFree();
         else
             photonView.RPC(nameof(RpcRequestRelease), RpcTarget.MasterClient);
+    }
+
+    /// <summary>Called by the holder to pin the box (and any welded block) where it is now.</summary>
+    public void RequestFreeze()
+    {
+        if (state != CargoState.Held) return;
+        if (holderActor != PhotonNetwork.LocalPlayer.ActorNumber) return;
+
+        // Freeze at the pose the player actually sees (their predicted transform).
+        Vector3 wp = transform.position;
+        Quaternion wr = transform.rotation;
+
+        if (Policy == CargoAuthorityPolicy.DistributedOwnership || PhotonNetwork.IsMasterClient)
+            photonView.RPC(nameof(RpcApplyState), RpcTarget.All,
+                (int)CargoState.Frozen, -1, -1, wp, wr, true);
+        else
+            photonView.RPC(nameof(RpcRequestFreeze), RpcTarget.MasterClient, wp, wr);
+    }
+
+    /// <summary>Called by any player to unpin a frozen box back into free physics.</summary>
+    public void RequestUnfreeze()
+    {
+        if (state != CargoState.Frozen) return;
+
+        photonView.RPC(nameof(RpcApplyState), RpcTarget.All,
+            (int)CargoState.Free, -1, -1, Vector3.zero, Quaternion.identity, false);
     }
 
     private void MasterGrant(int actorNumber)
@@ -648,7 +704,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     private void PlaceInMovingFrame()
     {
         if (ReferenceFrame == null || rb == null) return;
-        if (state == CargoState.Stowed || IsWriter || !hasSmoothPose) return;
+        if (state == CargoState.Stowed || state == CargoState.Frozen || IsWriter || !hasSmoothPose) return;
 
         transform.SetPositionAndRotation(
             FrameToWorldPoint(smoothLocalPos),
@@ -699,8 +755,9 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     {
         if (stream.IsWriting)
         {
-            // Stowed boxes send a constant so UnreliableOnChange suppresses them entirely.
-            bool sendPose = state != CargoState.Stowed;
+            // Stowed and Frozen boxes are static, so they send a constant and UnreliableOnChange
+            // suppresses them entirely.
+            bool sendPose = state != CargoState.Stowed && state != CargoState.Frozen;
 
             stream.SendNext((int)state);
             stream.SendNext(ReferenceFrame != null);
@@ -720,7 +777,7 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
             // State travels by reliable RPC while poses are unreliable, so a packet from
             // before the last transition can still land. Its pose is meaningless now.
-            if (remoteState != (int)state || state == CargoState.Stowed) return;
+            if (remoteState != (int)state || state == CargoState.Stowed || state == CargoState.Frozen) return;
 
             // Same reasoning for the frame: a pose in truck space is nonsense until we
             // have resolved the truck ourselves.
@@ -750,6 +807,17 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         if (state != CargoState.Held) return;
         if (info.Sender == null || info.Sender.ActorNumber != holderActor) return;
         AuthorityFree();
+    }
+
+    [PunRPC]
+    private void RpcRequestFreeze(Vector3 worldPos, Quaternion worldRot, PhotonMessageInfo info)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        if (state != CargoState.Held) return;
+        if (info.Sender == null || info.Sender.ActorNumber != holderActor) return;
+
+        photonView.RPC(nameof(RpcApplyState), RpcTarget.All,
+            (int)CargoState.Frozen, -1, -1, worldPos, worldRot, true);
     }
 
     [PunRPC]
@@ -798,15 +866,20 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         if (!PhotonNetwork.CurrentRoom.Players.ContainsKey(target.ActorNumber)) yield break;
 
         bool stowed = state == CargoState.Stowed;
-        Vector3 localPos = stowed ? transform.localPosition : Vector3.zero;
-        Quaternion localRot = stowed ? transform.localRotation : Quaternion.identity;
+        bool frozen = state == CargoState.Frozen;
+
+        // Stowed carries a carrier-local pose; Frozen carries its fixed world pose; the rest
+        // carry nothing here and get their world pose from the teleport below.
+        Vector3 localPos = stowed ? transform.localPosition : (frozen ? transform.position : Vector3.zero);
+        Quaternion localRot = stowed ? transform.localRotation : (frozen ? transform.rotation : Quaternion.identity);
 
         photonView.RPC(nameof(RpcApplyState), target,
-            (int)state, holderActor, ViewIdOf(carrier), localPos, localRot, stowed);
+            (int)state, holderActor, ViewIdOf(carrier), localPos, localRot, stowed || frozen);
 
-        // The pose stream is UnreliableOnChange, so a box that already settled sends
-        // nothing and the newcomer would keep it wherever it was instantiated.
-        if (!stowed)
+        // The pose stream is UnreliableOnChange, so a box that already settled sends nothing and
+        // the newcomer would keep it wherever it was instantiated. Stowed/Frozen already carried
+        // their pose in the state RPC above.
+        if (!stowed && !frozen)
             photonView.RPC(nameof(RpcTeleport), target, transform.position, transform.rotation);
     }
 
