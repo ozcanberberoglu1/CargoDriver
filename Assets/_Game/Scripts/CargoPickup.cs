@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Globalization;
 using Photon.Pun;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -53,6 +55,20 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     private Quaternion holdRotTarget = Quaternion.identity;
     private Vector3 frozenHoldPos;
 
+    [Header("Rotation (hold right mouse and drag)")]
+    [SerializeField] private float rotateSensitivity = 0.4f;
+
+    [Header("Scale (1 = bigger, 2 = smaller)")]
+    [SerializeField] private float scaleStep = 0.1f;
+    [SerializeField] private float minScale = 0.3f;
+    [SerializeField] private float maxScale = 2.0f;
+
+    private TextMeshPro scaleLabel;
+    private NetworkedCargoBody scaleLabelBox;
+    private float scaleLabelAge;
+    private const float scaleLabelHold = 2f;   // fully visible for this long
+    private const float scaleLabelFade = 1f;    // then fades out over this long
+
     private Vector3 streamedTargetPos;
     private Quaternion streamedTargetRot = Quaternion.identity;
 
@@ -60,6 +76,11 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     /// <summary>The box this player is carrying, valid on every client.</summary>
     private NetworkedCargoBody CarriedBody => NetworkedCargoBody.HeldBy(OwnerActor);
+
+    private void OnDestroy()
+    {
+        if (scaleLabel != null) Destroy(scaleLabel.gameObject);
+    }
 
     private void Start()
     {
@@ -90,13 +111,20 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         Mouse mouse = Mouse.current;
         if (mouse == null) return;
 
-        // Q pins the held brick in place, or unpins a frozen one you're aiming at.
         Keyboard kb = Keyboard.current;
+        bool pressing = mouse.leftButton.isPressed;
+        NetworkedCargoBody carried = CarriedBody;
+
+        // Q pins the held brick in place, or unpins a frozen one you're aiming at.
         if (kb != null && kb.qKey.wasPressedThisFrame)
             HandleFreezeKey(tc, mouse);
 
-        bool pressing = mouse.leftButton.isPressed;
-        NetworkedCargoBody carried = CarriedBody;
+        // 1 / 2 grow / shrink the held brick (works whether or not you're rotating).
+        if (kb != null && carried != null && carried.IsHeld)
+        {
+            if (kb.digit1Key.wasPressedThisFrame) ChangeScale(carried, scaleStep);
+            else if (kb.digit2Key.wasPressedThisFrame) ChangeScale(carried, -scaleStep);
+        }
 
         if (carried == null && grabIntent == null)
         {
@@ -248,6 +276,12 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         activePreviews.Clear();
     }
 
+    /// <summary>
+    /// Hold right mouse and drag to rotate the brick: horizontal → yaw, vertical → pitch, both
+    /// around the camera's axes so it always turns the way the mouse moves. Position is frozen
+    /// while rotating so the box turns in place. Snap-on-placement squares it to the grid, so the
+    /// player only needs to get roughly the right orientation. holdRotTarget streams via PushHoldTarget.
+    /// </summary>
     private void HandleRotateInput(Mouse mouse, NetworkedCargoBody body)
     {
         bool rightPressed = mouse.rightButton.isPressed;
@@ -266,14 +300,15 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         if (!isRotating) return;
 
         Vector2 delta = mouse.delta.ReadValue();
-        float rotX = delta.y * 0.5f;
-        float rotY = -delta.x * 0.5f;
+        if (delta.sqrMagnitude < 0.0001f) return;
 
         Camera cam = GetComponentInChildren<Camera>();
         Vector3 up = cam != null && cam.isActiveAndEnabled ? cam.transform.up : Vector3.up;
         Vector3 right = cam != null && cam.isActiveAndEnabled ? cam.transform.right : Vector3.right;
 
-        holdRotTarget = Quaternion.AngleAxis(rotY, up) * Quaternion.AngleAxis(rotX, right) * holdRotTarget;
+        float yaw = -delta.x * rotateSensitivity;   // drag left/right → yaw
+        float pitch = delta.y * rotateSensitivity;  // drag up/down    → pitch
+        holdRotTarget = Quaternion.AngleAxis(yaw, up) * Quaternion.AngleAxis(pitch, right) * holdRotTarget;
     }
 
     private void HandleScrollInput(Mouse mouse)
@@ -283,6 +318,83 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
         currentHoldDist += scroll * scrollSpeed * Time.deltaTime;
         currentHoldDist = Mathf.Clamp(currentHoldDist, minHoldDist, maxHoldDist);
+    }
+
+    /// <summary>Steps the held brick's uniform scale and networks it, then shows the label.</summary>
+    private void ChangeScale(NetworkedCargoBody box, float delta)
+    {
+        float cur = box.transform.localScale.x;
+        float next = Mathf.Clamp(cur + delta, minScale, maxScale);
+        next = Mathf.Round(next * 10f) / 10f; // keep it on clean 0.1 steps
+
+        box.RequestScale(next);
+        ShowScaleLabel(box, next);
+    }
+
+    private void EnsureScaleLabel()
+    {
+        if (scaleLabel != null) return;
+
+        var go = new GameObject("ScaleLabel");
+        scaleLabel = go.AddComponent<TextMeshPro>();            // 3D world-space text (default font)
+        scaleLabel.alignment = TextAlignmentOptions.Center;
+        scaleLabel.fontSize = 8f;
+        scaleLabel.color = Color.white;
+        scaleLabel.outlineWidth = 0.2f;
+        scaleLabel.outlineColor = Color.black;
+        scaleLabel.rectTransform.sizeDelta = new Vector2(4f, 1.5f);
+        go.transform.localScale = Vector3.one * 0.3f;          // keep it a sensible size above the box
+        go.SetActive(false);
+    }
+
+    private void ShowScaleLabel(NetworkedCargoBody box, float scale)
+    {
+        EnsureScaleLabel();
+        scaleLabelBox = box;
+        scaleLabel.text = scale.ToString("0.0", CultureInfo.InvariantCulture) + "x";
+        scaleLabel.gameObject.SetActive(true);
+        scaleLabelAge = 0f;
+    }
+
+    /// <summary>Local-only: floats the scale label above the box, billboarded, then fades it out.</summary>
+    private void UpdateScaleLabel()
+    {
+        if (scaleLabel == null || !scaleLabel.gameObject.activeSelf) return;
+
+        scaleLabelAge += Time.deltaTime;
+        if (scaleLabelBox == null || scaleLabelAge > scaleLabelHold + scaleLabelFade)
+        {
+            scaleLabel.gameObject.SetActive(false);
+            return;
+        }
+
+        // Sit above the TOP of the whole structure (box + welded children), not one box, so it
+        // never ends up buried inside a stack. Mesh renderers only — the grid Images use
+        // CanvasRenderer and are skipped, so they don't inflate the bounds.
+        Renderer[] rends = scaleLabelBox.GetComponentsInChildren<Renderer>();
+        Vector3 pos;
+        if (rends.Length > 0)
+        {
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            pos = new Vector3(b.center.x, b.max.y + 0.4f, b.center.z);
+        }
+        else
+        {
+            pos = scaleLabelBox.transform.position + Vector3.up * 1.2f;
+        }
+        scaleLabel.transform.position = pos;
+
+        Camera cam = GetComponentInChildren<Camera>();
+        if (cam != null)
+            scaleLabel.transform.rotation = cam.transform.rotation; // billboard toward the viewer
+
+        float alpha = scaleLabelAge <= scaleLabelHold
+            ? 1f
+            : 1f - (scaleLabelAge - scaleLabelHold) / scaleLabelFade;
+        Color c = scaleLabel.color;
+        c.a = Mathf.Clamp01(alpha);
+        scaleLabel.color = c;
     }
 
     private void HandleSnapKeys(NetworkedCargoBody carried)
@@ -422,6 +534,8 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
 
     private void LateUpdate()
     {
+        UpdateScaleLabel();
+
         if (rShoulder == null) return;
 
         Vector3 target = Vector3.zero;

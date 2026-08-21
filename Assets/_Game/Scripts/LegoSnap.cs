@@ -135,6 +135,7 @@ public class LegoSnap : MonoBehaviour
             {
                 if (other == this) continue;
                 if (other.snapColliders == null) continue;
+                if (!ScalesMatch(transform, other.transform)) continue; // only equal-scale bricks snap
 
                 foreach (Collider otherCol in other.snapColliders)
                 {
@@ -194,16 +195,23 @@ public class LegoSnap : MonoBehaviour
         Quaternion localRot = SnapTo90(Quaternion.Inverse(parentT.rotation) * childT.rotation);
         Quaternion targetWorldRot = parentT.rotation * localRot;
 
-        // Land the matched stud exactly on the parent stud, pushed by snapDepth along parent up.
         bool childIsDown = childCol.transform.name.StartsWith("DownCollider");
-        Vector3 targetColCenter = parentCol.bounds.center + parentT.up * (childIsDown ? snapDepth : -snapDepth);
+        float depth = (childIsDown ? snapDepth : -snapDepth) * parentT.lossyScale.y;
+        Vector3 targetColCenter = parentCol.bounds.center + parentT.up * depth;
 
-        // Re-solve the child-root position for the SQUARED rotation, so only this one matched stud
-        // is aligned. When a 2-stud brick is brought over a single stud, its other stud simply
-        // overhangs — it does not get force-fitted onto the neighbour.
         Vector3 colLocal = Quaternion.Inverse(childT.rotation) * (childCol.bounds.center - childT.position);
         Vector3 snappedWorldPos = targetColCenter - targetWorldRot * colLocal;
         Vector3 localPos = parentT.InverseTransformPoint(snappedWorldPos);
+
+        // TEMP diagnostics — measure the real geometry so we can compute the exact flush offset.
+        Collider pBody = OwnerBody(parentCol);
+        Collider cBody = OwnerBody(childCol);
+        Debug.Log($"[Snap] scale={parentT.lossyScale.y:0.00} snapDepth={snapDepth} " +
+                  $"parentTop(center.y={parentCol.bounds.center.y:0.000} h={parentCol.bounds.size.y:0.000}) " +
+                  $"childDown(center.y={childCol.bounds.center.y:0.000} h={childCol.bounds.size.y:0.000}) " +
+                  $"parentBody(top={(pBody != null ? pBody.bounds.max.y : 0):0.000} h={(pBody != null ? pBody.bounds.size.y : 0):0.000}) " +
+                  $"childBody(bottom={(cBody != null ? cBody.bounds.min.y : 0):0.000} h={(cBody != null ? cBody.bounds.size.y : 0):0.000}) " +
+                  $"childRoot.y={childT.position.y:0.000} snappedY={snappedWorldPos.y:0.000}");
 
         childBody.AuthorityStow(parentT, localPos, localRot);
 
@@ -245,6 +253,7 @@ public class LegoSnap : MonoBehaviour
                 {
                     if (other == null || members.Contains(other)) continue; // skip our own structure
                     if (other.snapColliders == null) continue;
+                    if (!ScalesMatch(member.transform, other.transform)) continue; // only equal-scale bricks
 
                     foreach (Collider top in other.snapColliders)
                     {
@@ -271,6 +280,12 @@ public class LegoSnap : MonoBehaviour
                 });
             }
         }
+    }
+
+    /// <summary>Only bricks scaled to the same size may connect — their stud grids line up.</summary>
+    private static bool ScalesMatch(Transform a, Transform b)
+    {
+        return Mathf.Abs(a.lossyScale.x - b.lossyScale.x) < 0.05f;
     }
 
     private bool IsCompatible(Collider a, Collider b)
@@ -333,6 +348,13 @@ public class LegoSnap : MonoBehaviour
     #endregion
 
     #region Helpers
+
+    /// <summary>The main body collider of the brick that owns a stud collider.</summary>
+    private static Collider OwnerBody(Collider stud)
+    {
+        LegoSnap owner = stud.GetComponentInParent<LegoSnap>();
+        return owner != null ? owner.GetComponent<Collider>() : null;
+    }
 
     /// <summary>Rounds a rotation to the nearest 90° on each axis so bricks weld square to the grid.</summary>
     private static Quaternion SnapTo90(Quaternion q)

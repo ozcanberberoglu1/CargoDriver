@@ -556,6 +556,21 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             (int)CargoState.Free, -1, -1, Vector3.zero, Quaternion.identity, false);
     }
 
+    /// <summary>Uniform-scales the held brick on every client. Only legos of equal scale snap.</summary>
+    public void RequestScale(float uniformScale)
+    {
+        if (state != CargoState.Held) return;
+        if (holderActor != PhotonNetwork.LocalPlayer.ActorNumber) return;
+
+        photonView.RPC(nameof(RpcSetScale), RpcTarget.All, uniformScale);
+    }
+
+    [PunRPC]
+    private void RpcSetScale(float s)
+    {
+        transform.localScale = new Vector3(s, s, s);
+    }
+
     private void MasterGrant(int actorNumber)
     {
         if (!PhotonNetwork.IsMasterClient) return;
@@ -875,6 +890,9 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
         photonView.RPC(nameof(RpcApplyState), target,
             (int)state, holderActor, ViewIdOf(carrier), localPos, localRot, stowed || frozen);
+
+        // Runtime scale changes aren't in the instantiation data, so restate it for newcomers.
+        photonView.RPC(nameof(RpcSetScale), target, transform.localScale.x);
 
         // The pose stream is UnreliableOnChange, so a box that already settled sends nothing and
         // the newcomer would keep it wherever it was instantiated. Stowed/Frozen already carried

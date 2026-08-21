@@ -105,11 +105,12 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 | WASD / oklar | Yürü · (araçta) sahip olunan tuş |
 | Space | Zıpla · (araçta) fren |
 | Sol tık | Kutu tut (basılı) |
-| Sağ tık | Tutarken döndür (pozisyon dondurulur) |
+| Sağ tık (basılı) + sürükle | Legoyu döndür — pozisyon donar; yatay → yaw, dikey → pitch (kamera eksenleri). Snap anında 90°'ye hizalanır |
 | Scroll | Tutma mesafesi (1–4 m) |
 | E | Lego snap · radyoda kayıt başlat |
+| Q | Tutulan legoyu sabitle (Frozen) / tutma tuşu basılı+hedefteyken sabiti çöz |
 | X / Z | Parent'tan ayır / hepsini ayır |
-| Q | Tutulan legoyu yerinde sabitle (Frozen) · (tutma tuşu basılı + hedefteyken) sabit legoyu çöz |
+| 1 / 2 | Tutulan legoyu büyüt / küçült (0.1 adım, 0.3–2.0 arası). Ölçek üstünde world-space text 2 sn görünüp solar. **Yalnız aynı ölçekli legolar birleşir** |
 | C | FPS↔TPS (oyuncu) · kamera açısı (araç) |
 | F | Araca bin / in |
 | R | Checkpoint respawn (yalnız master) |
