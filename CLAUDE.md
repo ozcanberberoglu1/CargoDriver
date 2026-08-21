@@ -47,6 +47,7 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 | `LobbyController` | 598 | LobbyScene | Spawn, pause paneli, ping, kargo tamam kontrolü, müzik/SFX |
 | `JoinGameController` | 617 | LobbyScene | Kontrol tuşu dağıtımı (`ctrl_W/A/S/D/Space`, `ctrl_Behind`), ready, geri sayım, **kargo layout'unu serialize eder** |
 | `CargoMachine` | ~230 | LobbyScene | Oyuncu 3D butona tıklar → **master** rastgele lego+renk spawn'lar (event 70, `InstantiateRoomObject`), 50'de durur. Sayaç/hazır bayrağı oda property (`legoCount`/`machineActive`/`legosReady`) |
+| `PressurePlateDoor` | ~190 | herhangi sahne | Butona oturan legoları **master** sayar (Held/Frozen/uçan hariç, welded üye üye), kademeli sürgülü kapı açar. Sayı oda property (`door_<doorKey>`), kapı sayıdan türetilir + titreme + world-space sayaç text |
 | `RadioController` | 391 | LobbyScene | Mikrofonla 10 sn kayıt → Photon event ile herkese, echo \+ pitch efekti |
 | `GameSceneController` | 472 | GameScene | Kamyon\+kargo spawn, checkpoint, ölüm bölgesi, layer kurulumu |
 | `MovingObstacle` (\+Editor) | 106\+259 | GameScene | Kinematik hareketli engel, custom inspector |

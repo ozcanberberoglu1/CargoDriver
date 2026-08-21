@@ -122,6 +122,9 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     public bool IsHeld => state == CargoState.Held;
     public bool IsFrozen => state == CargoState.Frozen;
 
+    /// <summary>Roughly at rest — used to reject legos that are still flying, not placed.</summary>
+    public bool IsSettled => rb == null || rb.isKinematic || rb.linearVelocity.sqrMagnitude < 0.5f;
+
     /// <summary>True on the single client responsible for simulating this body.</summary>
     public bool IsWriter => photonView.IsMine;
 

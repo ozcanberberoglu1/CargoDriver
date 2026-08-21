@@ -49,6 +49,7 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
     // Local-only snap hint bookkeeping (never networked).
     private readonly List<LegoSnap.SnapPreviewHit> previewHits = new List<LegoSnap.SnapPreviewHit>();
     private readonly HashSet<LegoSnapPreview> activePreviews = new HashSet<LegoSnapPreview>();
+    private readonly RaycastHit[] rayHits = new RaycastHit[16];
 
     private NetworkedCargoBody grabIntent;
     private float currentHoldDist;
@@ -500,13 +501,22 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         Camera cam = GetComponentInChildren<Camera>();
         if (cam == null || !cam.isActiveAndEnabled) return null;
 
+        // Nearest CARGO box along the ray, skipping triggers (like the pressure-plate button
+        // volume) and any other non-cargo collider, so a box inside a trigger can still be grabbed.
         Ray ray = new(cam.transform.position, cam.transform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, detectRange, cargoLayer))
+        int n = Physics.RaycastNonAlloc(ray, rayHits, detectRange, cargoLayer, QueryTriggerInteraction.Ignore);
+
+        Transform best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < n; i++)
         {
-            if (IsCargoBox(hit.collider.transform))
-                return hit.collider.transform;
+            if (rayHits[i].distance < bestDist && IsCargoBox(rayHits[i].collider.transform))
+            {
+                bestDist = rayHits[i].distance;
+                best = rayHits[i].collider.transform;
+            }
         }
-        return null;
+        return best;
     }
 
     private Transform FindClosestBox()
