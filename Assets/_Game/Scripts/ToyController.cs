@@ -30,6 +30,14 @@ public class ToyController : MonoBehaviourPun
 
     private CharacterController controller;
     private Animator animator;
+    private CharacterRagdoll ragdoll;
+
+    [Header("Ragdoll camera shake")]
+    [SerializeField] private float ragdollShakeAmp = 0.06f;
+    [SerializeField] private float ragdollShakeDuration = 0.22f;
+    [SerializeField] private float ragdollShakeFrequency = 18f;
+    private float ragdollShakeTimer;
+    private bool wasRagdolled;
     private Vector3 velocity;
     private float yaw;
     private float pitch = 20f;
@@ -61,6 +69,7 @@ public class ToyController : MonoBehaviourPun
     {
         controller = GetComponent<CharacterController>();
         animator = GetComponent<Animator>();
+        ragdoll = GetComponent<CharacterRagdoll>();
 
         if (playerCamera == null)
             playerCamera = GetComponentInChildren<Camera>();
@@ -231,9 +240,17 @@ public class ToyController : MonoBehaviourPun
 
     #endregion
 
+    /// <summary>Set by CharacterRagdoll while the body is a ragdoll — freezes normal locomotion.</summary>
+    public bool Ragdolled { get; set; }
+
     private void Update()
     {
         if (!photonView.IsMine) return;
+        if (Ragdolled)
+        {
+            HandleCamera(); // still let the player look around while knocked down
+            return;
+        }
 
         HandlePauseToggle();
 
@@ -331,6 +348,41 @@ public class ToyController : MonoBehaviourPun
             transform.position = ridingSeat.position;
 
         if (!photonView.IsMine || playerCamera == null) return;
+
+        // While ragdolled the root doesn't move (the bones do), so drive the camera off the bones.
+        if (Ragdolled && ragdoll != null)
+        {
+            if (!wasRagdolled) ragdollShakeTimer = ragdollShakeDuration; // jolt on impact
+            wasRagdolled = true;
+
+            Vector3 shake = Vector3.zero;
+            if (ragdollShakeTimer > 0f)
+            {
+                ragdollShakeTimer -= Time.deltaTime;
+                // Smooth (Perlin) rumble that eases out, instead of harsh per-frame jitter.
+                float fade = ragdollShakeTimer / ragdollShakeDuration;
+                float amp = ragdollShakeAmp * fade * fade;
+                float n = Time.time * ragdollShakeFrequency;
+                shake = new Vector3(Mathf.PerlinNoise(n, 0f) - 0.5f, Mathf.PerlinNoise(0f, n) - 0.5f, 0f) * (2f * amp);
+            }
+
+            if (isFPS && ragdoll.Head != null)
+            {
+                // Stay first-person from the head — you don't see yourself/your name, like normal FPS.
+                playerCamera.transform.position = ragdoll.Head.position + shake;
+                playerCamera.transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
+            }
+            else if (ragdoll.Hips != null)
+            {
+                // Third-person orbit of the hips.
+                Quaternion ragRot = Quaternion.Euler(pitch, yaw, 0f);
+                Vector3 ragTarget = ragdoll.Hips.position + Vector3.up * 0.3f;
+                playerCamera.transform.position = ragTarget + ragRot * new Vector3(0f, 0f, -cameraDistance) + shake;
+                playerCamera.transform.LookAt(ragTarget);
+            }
+            return;
+        }
+        wasRagdolled = false;
 
         if (isFPS)
         {

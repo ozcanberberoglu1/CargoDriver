@@ -109,6 +109,13 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
         ToyController tc = GetComponent<ToyController>();
         if (tc != null && tc.IsPaused) return;
 
+        // Knocked down → drop whatever you're holding and don't grab while down.
+        if (tc != null && tc.Ragdolled)
+        {
+            if (CarriedBody != null || grabIntent != null) ReleaseGrab(CarriedBody);
+            return;
+        }
+
         Mouse mouse = Mouse.current;
         if (mouse == null) return;
 

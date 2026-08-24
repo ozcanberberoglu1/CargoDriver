@@ -58,6 +58,7 @@ Assets/_Recovery/0.unity        Unity crash recovery artığı — kullanılmıy
 | `NetworkedCargoBody` | 808 | CargoBox/CargoBox2 prefab | **Kargo fiziğinin tek otoritesi** |
 | `LegoSnap` | 290 | CargoBox/CargoBox2 prefab | Stud geometrisi, snap hedefi bulma |
 | `BillboardUI` | 16 | Toy1 prefab | İsim etiketini kameraya çevirir |
+| `CharacterRagdoll` | ~130 | Toy1 prefab | Lego ile yeterli şiddette vurulunca ragdoll (RPC All), sahip kalkış zamanı+pozisyonunu yayınlar. Ragdoll sırasında PhotonTransform/AnimatorView kapalı. Kurulum: `Tools ▸ CargoDriver ▸ Setup Ragdoll` (RagdollSetup editor tool) |
 | `VehicleInteraction` | 530 | GameScene'de **runtime'da** üretilir (`VehicleInteraction_Local`) | F ile in/bin, exit noktası bulma, haritadan düşme |
 
 * * *
