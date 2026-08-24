@@ -574,6 +574,13 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         photonView.RPC(nameof(RpcSetScale), RpcTarget.All, uniformScale);
     }
 
+    /// <summary>Master sets the scale on every client (used by checkpoint restore to reset size).</summary>
+    public void AuthorityScale(float uniformScale)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        photonView.RPC(nameof(RpcSetScale), RpcTarget.All, uniformScale);
+    }
+
     [PunRPC]
     private void RpcSetScale(float s)
     {

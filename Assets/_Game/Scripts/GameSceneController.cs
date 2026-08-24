@@ -44,6 +44,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         public NetworkedCargoBody body;
         public Vector3 localPos;
         public Quaternion localRot;
+        public float scale;
     }
 
     private void Awake()
@@ -212,7 +213,8 @@ public class GameSceneController : MonoBehaviourPunCallbacks
             {
                 body = body,
                 localPos = truck.InverseTransformPoint(body.transform.position),
-                localRot = invTruckRot * body.transform.rotation
+                localRot = invTruckRot * body.transform.rotation,
+                scale = body.transform.localScale.x
             });
         }
     }
@@ -270,6 +272,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         foreach (CargoSnapshot snap in savedCargoSnapshots)
         {
             if (snap.body == null) continue;
+            snap.body.AuthorityScale(snap.scale); // reset any 1/2-key resizing too
             snap.body.AuthorityTeleport(
                 truck.TransformPoint(snap.localPos),
                 truck.rotation * snap.localRot);
