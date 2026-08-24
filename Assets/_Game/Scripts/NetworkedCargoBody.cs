@@ -42,11 +42,14 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 {
     public static CargoAuthorityPolicy Policy = CargoAuthorityPolicy.HostAuthority;
 
-    [Header("Melee (hit a character with a held lego → ragdoll)")]
-    [Tooltip("Minimum collision impulse to knock a character down. Raise it to need a harder swing.")]
-    [SerializeField] private float meleeThreshold = 4f;
+    [Header("Melee (swing a held lego into a character → ragdoll)")]
+    [Tooltip("Minimum swing speed (m/s) to knock a character down. Raise it to need a harder swing.")]
+    [SerializeField] private float meleeMinSpeed = 6f;
+    [Tooltip("How close the swung lego must get to a character to count as a hit.")]
+    [SerializeField] private float meleeRadius = 0.6f;
     [SerializeField] private float meleeKnockback = 8f;
     [SerializeField] private float meleeUp = 3f;
+    private static readonly Collider[] meleeHits = new Collider[8];
 
     [Header("Carry Servo")]
     [SerializeField] private float carryStiffness = 12f;
@@ -631,11 +634,42 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         if (IsWriter)
         {
             if (state == CargoState.Held && hasHoldTarget)
+            {
                 DriveHeldBody();
+                TryMeleeHit();
+            }
         }
         else if (hasNetPose)
         {
             DriveRemotePose();
+        }
+    }
+
+    /// <summary>
+    /// A held lego swung fast past a character knocks it into a ragdoll. Uses a proximity + speed
+    /// check (not a collision) so it works even on the "ghost" walking players in the game scene,
+    /// whose CharacterController lets rigidbodies pass through. Runs on the writer only, so the
+    /// swing speed is authoritative; it then tells the victim to ragdoll on every client.
+    /// </summary>
+    private void TryMeleeHit()
+    {
+        if (rb == null) return;
+        Vector3 vel = rb.linearVelocity;
+        if (vel.magnitude < meleeMinSpeed) return;
+
+        int n = Physics.OverlapSphereNonAlloc(transform.position, meleeRadius, meleeHits, ~0, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
+        {
+            CharacterRagdoll victim = meleeHits[i].GetComponentInParent<CharacterRagdoll>();
+            if (victim == null || victim.IsRagdolled) continue;
+            if (victim.photonView.OwnerActorNr == holderActor) continue; // not the one swinging it
+
+            Vector3 dir = vel; dir.y = 0f;
+            if (dir.sqrMagnitude < 0.01f) dir = victim.transform.position - transform.position;
+            Vector3 force = dir.normalized * meleeKnockback + Vector3.up * meleeUp;
+
+            victim.ApplyHit(force, transform.position);
+            return; // one victim per swing
         }
     }
 
@@ -749,8 +783,6 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
     /// </summary>
     private void OnCollisionEnter(Collision collision)
     {
-        TryMeleeHit(collision);
-
         if (Policy != CargoAuthorityPolicy.DistributedOwnership) return;
         if (state != CargoState.Held || !IsWriter || !IsHeldByLocalPlayer) return;
         if (collision.rigidbody == null) return;
@@ -762,29 +794,6 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
         other.lastOwnershipClaim = Time.time;
         other.photonView.TransferOwnership(PhotonNetwork.LocalPlayer);
-    }
-
-    /// <summary>
-    /// A held lego swung hard into a character knocks it into a ragdoll. Only the writer (the
-    /// machine actually simulating this lego) decides, so the impulse is authoritative; it then
-    /// tells the victim to ragdoll on every client. Works in both authority policies.
-    /// </summary>
-    private void TryMeleeHit(Collision collision)
-    {
-        if (state != CargoState.Held || !IsWriter) return;
-        if (collision.impulse.magnitude < meleeThreshold) return;
-
-        CharacterRagdoll victim = collision.collider.GetComponentInParent<CharacterRagdoll>();
-        if (victim == null || victim.IsRagdolled) return;
-        if (victim.photonView.OwnerActorNr == holderActor) return; // don't ragdoll the one swinging it
-
-        Vector3 point = collision.GetContact(0).point;
-        Vector3 dir = victim.transform.position - point;
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.0001f) dir = -collision.relativeVelocity;
-        Vector3 force = dir.normalized * meleeKnockback + Vector3.up * meleeUp;
-
-        victim.ApplyHit(force, point);
     }
 
     private void ResolvePendingCarrier()
