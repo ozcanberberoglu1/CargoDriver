@@ -258,9 +258,21 @@ public class GameSceneController : MonoBehaviourPunCallbacks
     {
         foreach (NetworkedCargoBody body in NetworkedCargoBody.All)
         {
-            if (body != null && body.State == CargoState.Stowed)
-                body.AuthorityFree();
+            if (body == null || body.State != CargoState.Stowed) continue;
+            if (IsPinned(body)) continue; // leave pinned blocks welded and in place
+            body.AuthorityFree();
         }
+    }
+
+    /// <summary>True if the brick is frozen in place, or a welded part of a frozen block.</summary>
+    private static bool IsPinned(NetworkedCargoBody body)
+    {
+        if (body.State == CargoState.Frozen) return true;
+
+        LegoSnap snap = body.GetComponent<LegoSnap>();
+        if (snap == null) return false;
+        NetworkedCargoBody root = snap.GetRoot().GetComponent<NetworkedCargoBody>();
+        return root != null && root.State == CargoState.Frozen;
     }
 
     private void RestoreCargoSnapshot()
@@ -272,6 +284,7 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         foreach (CargoSnapshot snap in savedCargoSnapshots)
         {
             if (snap.body == null) continue;
+            if (IsPinned(snap.body)) continue; // frozen legos stay where they were pinned, at their size
             snap.body.AuthorityScale(snap.scale); // reset any 1/2-key resizing too
             snap.body.AuthorityTeleport(
                 truck.TransformPoint(snap.localPos),
