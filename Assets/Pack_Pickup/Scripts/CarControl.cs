@@ -55,6 +55,10 @@ public class CarControl : MonoBehaviourPun, IPunObservable, IOnEventCallback
         if (rb != null)
         {
             rb.interpolation = RigidbodyInterpolation.Interpolate;
+            // Cap depenetration so a body that ends up overlapping the car (a ragdoll sliding
+            // under it, a character standing up inside it) is pushed out gently instead of
+            // launching the whole car into the air.
+            rb.maxDepenetrationVelocity = 1f;
             targetPos = rb.position;
             targetRot = rb.rotation;
         }

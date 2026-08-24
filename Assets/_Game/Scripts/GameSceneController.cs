@@ -202,10 +202,11 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         Transform truck = spawnedPickup.transform;
         Quaternion invTruckRot = Quaternion.Inverse(truck.rotation);
 
+        // Capture every lego — including welded ones — so a respawn can put each brick back
+        // individually (the welds are broken on restore, everything separates).
         foreach (NetworkedCargoBody body in NetworkedCargoBody.All)
         {
             if (body == null) continue;
-            if (body.State == CargoState.Stowed) continue;
 
             savedCargoSnapshots.Add(new CargoSnapshot
             {
@@ -245,8 +246,19 @@ public class GameSceneController : MonoBehaviourPunCallbacks
         spawnedPickup.transform.position = spawnPos;
         spawnedPickup.transform.rotation = spawnRot;
 
+        DetachAllCargo();      // break every weld so nothing comes back combined
         RestoreCargoSnapshot();
         StartCoroutine(EnableCarAfterRespawn());
+    }
+
+    /// <summary>Breaks all lego welds so a respawn fully separates them (master authoritative).</summary>
+    private void DetachAllCargo()
+    {
+        foreach (NetworkedCargoBody body in NetworkedCargoBody.All)
+        {
+            if (body != null && body.State == CargoState.Stowed)
+                body.AuthorityFree();
+        }
     }
 
     private void RestoreCargoSnapshot()

@@ -207,9 +207,35 @@ public class CharacterRagdoll : MonoBehaviourPun
     {
         Vector3 p = hips != null ? hips.position : transform.position;
         if (Physics.Raycast(p + Vector3.up * 1.5f, Vector3.down, out RaycastHit hit, 5f, groundMask, QueryTriggerInteraction.Ignore))
-            return hit.point;
-        p.y = transform.position.y;
-        return p;
+            p = hit.point;
+        else
+            p.y = transform.position.y;
+
+        return ClearOfVehicles(p);
+    }
+
+    /// <summary>
+    /// Pushes the stand-up spot out from under a vehicle, so the character never stands up inside
+    /// the car (which would overlap it and launch it). Runs once on get-up, so it's cheap.
+    /// </summary>
+    private Vector3 ClearOfVehicles(Vector3 pos)
+    {
+        int vehicle = LayerMask.NameToLayer("Vehicle");
+        if (vehicle < 0) return pos;
+        int mask = 1 << vehicle;
+
+        for (int i = 0; i < 8; i++)
+        {
+            Collider[] hits = Physics.OverlapCapsule(
+                pos + Vector3.up * 0.4f, pos + Vector3.up * 1.6f, 0.4f, mask, QueryTriggerInteraction.Ignore);
+            if (hits.Length == 0) break;
+
+            Vector3 away = pos - hits[0].bounds.center;
+            away.y = 0f;
+            if (away.sqrMagnitude < 0.01f) away = transform.forward;
+            pos += away.normalized * 0.6f;
+        }
+        return pos;
     }
 
     private Quaternion UprightRotation()
