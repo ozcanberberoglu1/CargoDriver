@@ -16,7 +16,7 @@ using UnityEngine.InputSystem;
 ///   the streamed animated pose doesn't fight the local ragdoll; they come back on when it stands.
 /// </summary>
 [RequireComponent(typeof(PhotonView))]
-public class CharacterRagdoll : MonoBehaviourPun
+public class CharacterRagdoll : MonoBehaviourPun, IPunObservable
 {
     [Tooltip("The hips bone — the ragdoll's root, where the knockback impulse is applied.")]
     [SerializeField] private Transform hips;
@@ -65,6 +65,10 @@ public class CharacterRagdoll : MonoBehaviourPun
     private Transform headBone;         // for the first-person camera while ragdolled
     private AudioSource fallAudio;
 
+    private Vector3 netHipsPos;          // owner's hips pose, so remotes place the body identically
+    private Quaternion netHipsRot = Quaternion.identity;
+    private bool hasNetHips;
+
     public bool IsRagdolled => ragdolled;
 
     /// <summary>Every live character, so a swung lego can find them without relying on colliders.</summary>
@@ -111,6 +115,12 @@ public class CharacterRagdoll : MonoBehaviourPun
         fallAudio.dopplerLevel = 0f;
         fallAudio.minDistance = soundMinDistance;
         fallAudio.maxDistance = soundMaxDistance;
+
+        // Observe this component so the hips pose can be streamed while ragdolled.
+        if (photonView.ObservedComponents == null)
+            photonView.ObservedComponents = new List<Component>();
+        if (!photonView.ObservedComponents.Contains(this))
+            photonView.ObservedComponents.Add(this);
 
         SetRagdollActive(false); // start animated
     }
@@ -188,12 +198,18 @@ public class CharacterRagdoll : MonoBehaviourPun
     private void SetRagdollActive(bool active)
     {
         ragdolled = active;
+        if (active) hasNetHips = false;
 
+        bool owner = photonView.IsMine;
         foreach (Rigidbody rb in bones)
         {
-            rb.isKinematic = !active;
+            // On the owner every bone is full physics. On remotes the hips is kinematic and driven
+            // by the streamed pose so the body sits in the same place everywhere; the other bones
+            // still dangle locally, which is only cosmetic.
+            bool kinematic = !active || (!owner && rb == hipsBody);
+            rb.isKinematic = kinematic;
             rb.interpolation = active ? RigidbodyInterpolation.Interpolate : RigidbodyInterpolation.None;
-            if (active)
+            if (active && !kinematic)
             {
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
@@ -209,6 +225,38 @@ public class CharacterRagdoll : MonoBehaviourPun
         // The ragdoll runs locally on each client; don't let the streamed animated pose fight it.
         if (transformView != null) transformView.enabled = !active;
         if (animatorView != null) animatorView.enabled = !active;
+    }
+
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            bool sending = ragdolled && hips != null;
+            stream.SendNext(sending);
+            stream.SendNext(sending ? hips.position : Vector3.zero);
+            stream.SendNext(sending ? hips.rotation : Quaternion.identity);
+        }
+        else
+        {
+            bool remoteRag = (bool)stream.ReceiveNext();
+            Vector3 hp = (Vector3)stream.ReceiveNext();
+            Quaternion hr = (Quaternion)stream.ReceiveNext();
+
+            if (remoteRag)
+            {
+                netHipsPos = hp;
+                netHipsRot = hr;
+                hasNetHips = true;
+            }
+        }
+    }
+
+    // Remotes drive the (kinematic) hips to the owner's streamed pose so the body matches everywhere.
+    private void FixedUpdate()
+    {
+        if (photonView.IsMine || !ragdolled || !hasNetHips || hipsBody == null) return;
+        hipsBody.MovePosition(netHipsPos);
+        hipsBody.MoveRotation(netHipsRot);
     }
 
     /// <summary>Ground point under the hips, so the character stands where it actually fell.</summary>
