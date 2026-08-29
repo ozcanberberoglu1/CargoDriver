@@ -669,11 +669,13 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
             if (victim.photonView.OwnerActorNr == holderActor) continue; // not the one swinging it
             if (Vector3.Distance(legoCenter, victim.BodyCenter) > reach) continue;
 
-            Vector3 dir = vel; dir.y = 0f;
-            if (dir.sqrMagnitude < 0.01f) dir = victim.BodyCenter - legoCenter;
+            // Knock the victim away from the lego (the direction of the hit), not off the swing arc.
+            Vector3 dir = victim.BodyCenter - legoCenter;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 0.01f) { dir = vel; dir.y = 0f; }
             Vector3 force = dir.normalized * meleeKnockback + Vector3.up * meleeUp;
 
-            victim.ApplyHit(force, legoCenter);
+            victim.ApplyHit(force, victim.BodyCenter); // at the chest, so it topples that way
             return; // one victim per swing
         }
     }

@@ -101,6 +101,13 @@ public class CharacterRagdoll : MonoBehaviourPun, IPunObservable
         boneColliders = cols.ToArray();
         hipsBody = hips != null ? hips.GetComponent<Rigidbody>() : (bones.Length > 0 ? bones[0] : null);
 
+        // Ragdoll bones should collide with the world, but NOT with each other — overlapping limb
+        // capsules are what makes the arms/legs jitter as the solver keeps shoving them apart.
+        for (int i = 0; i < boneColliders.Length; i++)
+            for (int j = i + 1; j < boneColliders.Length; j++)
+                if (boneColliders[i] != null && boneColliders[j] != null)
+                    Physics.IgnoreCollision(boneColliders[i], boneColliders[j], true);
+
         BillboardUI billboard = GetComponentInChildren<BillboardUI>(true);
         if (billboard != null)
         {
@@ -217,6 +224,8 @@ public class CharacterRagdoll : MonoBehaviourPun, IPunObservable
                 // Heavier damping while down so the limbs settle instead of flailing.
                 rb.linearDamping = ragdollDrag;
                 rb.angularDamping = ragdollAngularDrag;
+                rb.maxDepenetrationVelocity = 2f; // don't let overlaps fling a limb out
+                rb.solverIterations = 20;         // steadier joints, less jitter
                 if (!kinematic)
                 {
                     rb.linearVelocity = Vector3.zero;
