@@ -157,3 +157,9 @@ Her yeni sistem/özellik için cevaplanması gereken sorular:
 - **Determinizm.** Fizik sonucu iki makinede aynı çıkmaz; sonucu her yerde aynı olması gereken şeyler simülasyondan değil otoriteden gelmeli.
 
 Kod önerirken bu maddeler ayrıca sorulmayı beklemeden dikkate alınır; ihlal riski varsa çözümle birlikte söylenir.
+
+* * *
+
+## 9\. Yanıt stili
+
+Cevaplar **kısa ve öz** olsun. Gereksiz özet, tekrar, "ne yaptım" anlatımı ve seçenek sıralaması yok — sadece sonuç ve gerekiyorsa tek cümlelik gerekçe. Kod değişikliğinden sonra dosya:satır referansı ver, değişen kodu tekrar yapıştırma. Uzun açıklama ancak kullanıcı isterse.

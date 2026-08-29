@@ -298,7 +298,7 @@ MonoBehaviour:
   soundMinDistance: 2
   soundMaxDistance: 20
   testKey: 30
-  testKnockback: 8
+  testKnockback: 2
 --- !u!1 &395683921927027890
 GameObject:
   m_ObjectHideFlags: 0

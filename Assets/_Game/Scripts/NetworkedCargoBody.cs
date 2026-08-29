@@ -44,12 +44,11 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
 
     [Header("Melee (swing a held lego into a character → ragdoll)")]
     [Tooltip("Minimum swing speed (m/s) to knock a character down. Raise it to need a harder swing.")]
-    [SerializeField] private float meleeMinSpeed = 6f;
-    [Tooltip("How close the swung lego must get to a character to count as a hit.")]
-    [SerializeField] private float meleeRadius = 0.6f;
+    [SerializeField] private float meleeMinSpeed = 9f;
+    [Tooltip("Extra reach around the lego's body that still counts as a hit.")]
+    [SerializeField] private float meleeRadius = 0.25f;
     [SerializeField] private float meleeKnockback = 8f;
     [SerializeField] private float meleeUp = 3f;
-    private static readonly Collider[] meleeHits = new Collider[8];
 
     [Header("Carry Servo")]
     [SerializeField] private float carryStiffness = 12f;
@@ -657,18 +656,24 @@ public class NetworkedCargoBody : MonoBehaviourPunCallbacks, IPunInstantiateMagi
         Vector3 vel = rb.linearVelocity;
         if (vel.magnitude < meleeMinSpeed) return;
 
-        int n = Physics.OverlapSphereNonAlloc(transform.position, meleeRadius, meleeHits, ~0, QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < n; i++)
+        // Distance-based, using the character's own (networked) position — no reliance on colliders,
+        // whose enabled/trigger state on a "ghost" walking player is inconsistent. The lego's body
+        // radius is added so a big/scaled brick reaches from its surface, not just its center.
+        Collider myCol = GetComponent<Collider>();
+        Vector3 legoCenter = myCol != null ? myCol.bounds.center : transform.position;
+        float reach = (myCol != null ? myCol.bounds.extents.magnitude : 0.4f) + meleeRadius;
+
+        foreach (CharacterRagdoll victim in CharacterRagdoll.All)
         {
-            CharacterRagdoll victim = meleeHits[i].GetComponentInParent<CharacterRagdoll>();
             if (victim == null || victim.IsRagdolled) continue;
             if (victim.photonView.OwnerActorNr == holderActor) continue; // not the one swinging it
+            if (Vector3.Distance(legoCenter, victim.BodyCenter) > reach) continue;
 
             Vector3 dir = vel; dir.y = 0f;
-            if (dir.sqrMagnitude < 0.01f) dir = victim.transform.position - transform.position;
+            if (dir.sqrMagnitude < 0.01f) dir = victim.BodyCenter - legoCenter;
             Vector3 force = dir.normalized * meleeKnockback + Vector3.up * meleeUp;
 
-            victim.ApplyHit(force, transform.position);
+            victim.ApplyHit(force, legoCenter);
             return; // one victim per swing
         }
     }

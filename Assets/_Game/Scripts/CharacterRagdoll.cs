@@ -67,6 +67,15 @@ public class CharacterRagdoll : MonoBehaviourPun
 
     public bool IsRagdolled => ragdolled;
 
+    /// <summary>Every live character, so a swung lego can find them without relying on colliders.</summary>
+    public static readonly List<CharacterRagdoll> All = new List<CharacterRagdoll>();
+
+    /// <summary>Roughly the middle of the torso (the root sits at the feet).</summary>
+    public Vector3 BodyCenter => transform.position + Vector3.up * 1f;
+
+    private void OnEnable() { if (!All.Contains(this)) All.Add(this); }
+    private void OnDisable() { All.Remove(this); }
+
     private void Awake()
     {
         toy = GetComponent<ToyController>();
