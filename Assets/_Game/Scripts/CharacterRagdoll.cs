@@ -24,6 +24,9 @@ public class CharacterRagdoll : MonoBehaviourPun, IPunObservable
     [SerializeField] private float ragdollDuration = 3f;
     [Tooltip("Seconds to smoothly blend from the fallen pose into standing (0 = instant snap).")]
     [SerializeField] private float getUpBlend = 0.45f;
+    [Header("Ragdoll damping (higher = less flailing)")]
+    [SerializeField] private float ragdollDrag = 0.6f;
+    [SerializeField] private float ragdollAngularDrag = 6f;
     [SerializeField] private LayerMask groundMask = ~0;
     [Tooltip("How high above the hips the name tag rides while the character is down.")]
     [SerializeField] private float nameLabelUp = 0.6f;
@@ -209,10 +212,16 @@ public class CharacterRagdoll : MonoBehaviourPun, IPunObservable
             bool kinematic = !active || (!owner && rb == hipsBody);
             rb.isKinematic = kinematic;
             rb.interpolation = active ? RigidbodyInterpolation.Interpolate : RigidbodyInterpolation.None;
-            if (active && !kinematic)
+            if (active)
             {
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
+                // Heavier damping while down so the limbs settle instead of flailing.
+                rb.linearDamping = ragdollDrag;
+                rb.angularDamping = ragdollAngularDrag;
+                if (!kinematic)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                }
             }
         }
         foreach (Collider c in boneColliders)
