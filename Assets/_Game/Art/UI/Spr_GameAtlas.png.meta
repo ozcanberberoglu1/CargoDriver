@@ -527,7 +527,7 @@ TextureImporter:
         width: 84
         height: 85
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -536,6 +536,28 @@ TextureImporter:
       bones: []
       spriteID: 41d014af3baee488985c5d27aa97d390
       internalID: -472068112
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Spr_GameAtlas_19
+      rect:
+        serializedVersion: 2
+        x: 29
+        y: 1033
+        width: 242
+        height: 233
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 33, y: 32, z: 33, w: 34}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e93ccadabd03d40d1a573f44528ebe17
+      internalID: -540030947
       vertices: []
       indices: 
       edges: []
@@ -565,6 +587,7 @@ TextureImporter:
       Spr_GameAtlas_16: -840159276
       Spr_GameAtlas_17: 778071604
       Spr_GameAtlas_18: -472068112
+      Spr_GameAtlas_19: -540030947
       Spr_GameAtlas_2: 580251378
       Spr_GameAtlas_3: 1379481947
       Spr_GameAtlas_4: -709252984

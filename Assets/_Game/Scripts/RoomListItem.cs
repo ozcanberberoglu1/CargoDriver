@@ -100,6 +100,20 @@ public class RoomListItem : MonoBehaviour
         if (roomInfo == null) return;
         if (roomInfo.PlayerCount >= roomInfo.MaxPlayers) return;
 
+        bool isPrivate = roomInfo.CustomProperties.TryGetValue("password", out object pw)
+                         && !string.IsNullOrEmpty(pw as string);
+
+        if (isPrivate)
+        {
+            // Locked room: hand off to the password prompt instead of joining directly.
+            var panel = FindAnyObjectByType<PrivateRoomJoinPanel>(FindObjectsInactive.Include);
+            if (panel != null)
+            {
+                panel.Open(roomInfo);
+                return;
+            }
+        }
+
         PhotonNetwork.JoinRoom(roomInfo.Name);
     }
 }
