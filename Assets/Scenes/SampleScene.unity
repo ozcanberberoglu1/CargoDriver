@@ -3916,7 +3916,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Co-op puzzle adventure in a giant toom.
+  m_text: Co-op puzzle adventure in a giant room.
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: b98ccd5c7793444cbbc9e128b64dcf34, type: 2}
   m_sharedMaterial: {fileID: -1276644796583098205, guid: b98ccd5c7793444cbbc9e128b64dcf34, type: 2}
