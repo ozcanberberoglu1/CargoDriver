@@ -310,7 +310,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 204.2, y: -3.000023}
+  m_AnchoredPosition: {x: 201.8, y: -3.000023}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &7104808502025021916
@@ -460,6 +460,7 @@ GameObject:
   - component: {fileID: 6188988505885004433}
   - component: {fileID: 5573559415619881942}
   - component: {fileID: 7388001231307108705}
+  - component: {fileID: 4839458715314606019}
   m_Layer: 5
   m_Name: RoomContent
   m_TagString: Untagged
@@ -529,6 +530,27 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1.56
+--- !u!114 &4839458715314606019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3536192635139406939}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b882ffd3cc934d4da02f00bf1ad8925, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RoomListItem
+  roomNameText: {fileID: 4027199937787743473}
+  roomCountText: {fileID: 5982446465441595892}
+  pingCountText: {fileID: 1362059038785562246}
+  joinButton: {fileID: 8777153778018961333}
+  statusIcon: {fileID: 1402050374840395483}
+  statusCountText: {fileID: 3210034038772056899}
+  publicIcon: {fileID: -32490799, guid: a6d7ffd184a7b441e81bb09ebda1f09d, type: 3}
+  fullIcon: {fileID: -3764705, guid: a6d7ffd184a7b441e81bb09ebda1f09d, type: 3}
+  privateIcon: {fileID: -1063305416, guid: a6d7ffd184a7b441e81bb09ebda1f09d, type: 3}
 --- !u!1 &3635544900837965718
 GameObject:
   m_ObjectHideFlags: 0

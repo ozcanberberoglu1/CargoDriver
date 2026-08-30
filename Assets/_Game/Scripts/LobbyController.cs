@@ -480,6 +480,7 @@ public class LobbyController : MonoBehaviourPunCallbacks
     #region Ping Sync
 
     private float pingUpdateTimer;
+    private float hostPingTimer;
 
     private void LateUpdate()
     {
@@ -492,6 +493,20 @@ public class LobbyController : MonoBehaviourPunCallbacks
             PhotonNetwork.LocalPlayer.SetCustomProperties(
                 new Hashtable { { "ping", PhotonNetwork.GetPing() } }
             );
+        }
+
+        // The host publishes its ping into a room property so the lobby room list can show it.
+        // Kept slow (10 s) since every write pushes an update to everyone browsing the lobby.
+        if (PhotonNetwork.IsMasterClient)
+        {
+            hostPingTimer += Time.deltaTime;
+            if (hostPingTimer >= 10f)
+            {
+                hostPingTimer = 0f;
+                PhotonNetwork.CurrentRoom.SetCustomProperties(
+                    new Hashtable { { "hostPing", PhotonNetwork.GetPing() } }
+                );
+            }
         }
     }
 

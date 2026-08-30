@@ -198,14 +198,15 @@ public class MainMenuController : MonoBehaviourPunCallbacks
         {
             { "roomId", roomId },
             { "password", password },
-            { "roomName", roomName }
+            { "roomName", roomName },
+            { "hostPing", 0 }
         };
 
         RoomOptions options = new()
         {
             MaxPlayers = (byte)selectedPlayerCount,
             CustomRoomProperties = props,
-            CustomRoomPropertiesForLobby = new[] { "roomId", "password", "roomName" }
+            CustomRoomPropertiesForLobby = new[] { "roomId", "password", "roomName", "hostPing" }
         };
 
         PhotonNetwork.CreateRoom(roomId, options);
