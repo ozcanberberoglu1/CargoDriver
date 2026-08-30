@@ -48,6 +48,8 @@ MonoBehaviour:
   - RpcSetScale
   - RpcGetUp
   - RpcRagdoll
+  - RpcRequestToggle
+  - RpcSetDoor
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

@@ -107,7 +107,6 @@ GameObject:
   - component: {fileID: 1295808075075909996}
   - component: {fileID: 4773027153397760477}
   - component: {fileID: -7994968773385406892}
-  - component: {fileID: 7175008513927476356}
   m_Layer: 0
   m_Name: Pickup
   m_TagString: Untagged
@@ -324,27 +323,6 @@ MonoBehaviour:
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
---- !u!65 &7175008513927476356
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 406654488547587606}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 4.350019, y: 1.3126879, z: 0.27925682}
-  m_Center: {x: -0.0003619194, y: 2.514675, z: -4.5}
 --- !u!1 &1035304057869835875
 GameObject:
   m_ObjectHideFlags: 0
@@ -2309,6 +2287,9 @@ GameObject:
   - component: {fileID: 4862542789518881684}
   - component: {fileID: 6875409690690481156}
   - component: {fileID: 7869763921200500759}
+  - component: {fileID: 8400649989060311101}
+  - component: {fileID: 8184121872751312013}
+  - component: {fileID: 235503863822612481}
   m_Layer: 0
   m_Name: PickupBackDoor
   m_TagString: Untagged
@@ -2325,7 +2306,7 @@ Transform:
   m_GameObject: {fileID: 8571651686125681320}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.0025138855, y: 1.77, z: -4.45}
+  m_LocalPosition: {x: 0.0025138855, y: 1.822, z: -4.467}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2389,3 +2370,66 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!65 &8400649989060311101
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8571651686125681320}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 3.4983265, y: 1.2681966, z: 0.25538248}
+  m_Center: {x: -0.0025123358, y: 0.6305715, z: 0.11359919}
+--- !u!114 &8184121872751312013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8571651686125681320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa584fbee541324448dd18d8409c7a41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: PhotonUnityNetworking::Photon.Pun.PhotonView
+  ObservedComponentsFoldoutOpen: 1
+  Group: 0
+  prefixField: -1
+  Synchronization: 3
+  OwnershipTransfer: 0
+  observableSearch: 2
+  ObservedComponents: []
+  sceneViewId: 0
+  InstantiationId: 0
+  isRuntimeInstantiated: 0
+--- !u!114 &235503863822612481
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8571651686125681320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95aa363b81ce94c4385819551dddcbc8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PickupBackDoor
+  openRotationOffset: {x: -95.239, y: 0, z: 0}
+  openPositionOffset: {x: 0, y: 0, z: 0}
+  rotateSpeed: 160
+  interactRange: 4
+  outlineObject: {fileID: 0}
+  lookCamera: {fileID: 0}
+  toggleCooldown: 0.35
+  debugLog: 1

@@ -523,6 +523,19 @@ public class CargoPickup : MonoBehaviourPun, IPunObservable
                 best = rayHits[i].collider.transform;
             }
         }
+
+        // Occlusion: if a (closed) back door sits between us and the box, we can't grab through it.
+        // When the door is open its collider has swung out of the ray, so the box becomes grabbable.
+        if (best != null)
+        {
+            int m = Physics.RaycastNonAlloc(ray, rayHits, bestDist - 0.02f, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < m; i++)
+            {
+                if (rayHits[i].collider.GetComponentInParent<PickupBackDoor>() != null)
+                    return null;
+            }
+        }
+
         return best;
     }
 
