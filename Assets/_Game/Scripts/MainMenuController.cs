@@ -209,6 +209,7 @@ public class MainMenuController : MonoBehaviourPunCallbacks
             CustomRoomPropertiesForLobby = new[] { "roomId", "password", "roomName", "hostPing" }
         };
 
+        LoadingScreen.Instance?.Begin();
         PhotonNetwork.CreateRoom(roomId, options);
     }
 
@@ -309,11 +310,13 @@ public class MainMenuController : MonoBehaviourPunCallbacks
 
     public override void OnCreateRoomFailed(short returnCode, string message)
     {
+        LoadingScreen.Instance?.Cancel();
         Debug.LogError($"[MainMenu] Create room failed: {message}");
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)
     {
+        LoadingScreen.Instance?.Cancel();
         Debug.LogError($"[MainMenu] Join room failed: {message}");
     }
 

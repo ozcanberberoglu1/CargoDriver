@@ -65,6 +65,7 @@ public class PrivateRoomJoinPanel : MonoBehaviour
 
         if (entered == roomPassword)
         {
+            LoadingScreen.Instance?.Begin();
             PhotonNetwork.JoinRoom(targetRoom.Name);
             Close();
         }

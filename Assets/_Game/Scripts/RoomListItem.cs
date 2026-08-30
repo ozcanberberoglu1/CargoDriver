@@ -114,6 +114,7 @@ public class RoomListItem : MonoBehaviour
             }
         }
 
+        LoadingScreen.Instance?.Begin();
         PhotonNetwork.JoinRoom(roomInfo.Name);
     }
 }
